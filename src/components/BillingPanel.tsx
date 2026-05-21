@@ -283,10 +283,38 @@ export default function BillingPanel({
               <span className="text-[10px] font-bold text-slate-400 uppercase font-sans tracking-widest flex items-center gap-1.5"><Scale className="h-4 w-4" /> Official Municipal Billing Ticket</span>
               <div className="flex gap-1">
                 <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/document-templates/generate", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          documentType: "Statement of Account",
+                          sourceModule: "billing",
+                          sourceRecordId: selectedSoa.id
+                        })
+                      });
+                      if (res.ok) {
+                        const doc = await res.json();
+                        alert(`Cryptographically sealed SOA Document compiled successfully!\nSerial: ${doc.documentNumber}\n\nYou can access, print, and download this and other layout sheets in the 'Document Templates -> Generated Prints Log' panel.`);
+                      } else {
+                        const err = await res.json();
+                        alert(`Compilation error: ${err.message || "Please verify that a default active 'Statement of Account' template exists in system settings."}`);
+                      }
+                    } catch (e) {
+                      alert("Network error calling document render service.");
+                    }
+                  }}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded text-[10px] font-sans font-bold flex items-center gap-1 cursor-pointer transition"
+                >
+                  <QrCode className="h-3.5 w-3.5" /> Compile Template PDF
+                </button>
+                <button
                   onClick={() => window.print()}
                   className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer"
                 >
-                  <Printer className="h-3.5 w-3.5" /> Print
+                  <Printer className="h-3.5 w-3.5" /> Print Raw
                 </button>
                 <button
                   onClick={() => setSelectedSoa(null)}

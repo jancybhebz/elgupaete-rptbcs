@@ -263,6 +263,68 @@ export interface PropertyStatusHistory {
   remarks: string;
 }
 
+export interface DocumentTemplate {
+  id: number;
+  templateCode: string;
+  templateName: string;
+  templateCategory: string;
+  documentType: string;
+  description: string;
+  paperSize: "A4" | "Letter" | "Legal" | "Custom";
+  orientation: "portrait" | "landscape";
+  marginTop: number;
+  marginRight: number;
+  marginBottom: number;
+  marginLeft: number;
+  headerHtml: string;
+  bodyHtml: string;
+  footerHtml: string;
+  cssStyles: string;
+  availableVariables: string; // JSON array of strings
+  isDefault: boolean;
+  isActive: boolean;
+  status: "draft" | "for_review" | "approved" | "archived";
+  createdBy: string;
+  reviewedBy: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface DocumentTemplateVersion {
+  id: number;
+  templateId: number;
+  versionNumber: number;
+  headerHtml: string;
+  bodyHtml: string;
+  footerHtml: string;
+  cssStyles: string;
+  changeSummary: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface GeneratedDocument {
+  id: number;
+  templateId: number;
+  documentType: string;
+  sourceModule: string;
+  sourceRecordId: number;
+  documentNumber: string;
+  filePath: string;
+  fileHash: string;
+  verificationCode: string;
+  verificationUrl: string;
+  status: "draft" | "final" | "voided" | "cancelled";
+  generatedBy: string;
+  generatedAt: string;
+  metadata: string; // JSON representation
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SystemSettings {
   lguName: string;
   province: string;
@@ -301,6 +363,9 @@ interface DatabaseSchema {
   propertyMutationItems: PropertyMutationItem[];
   propertyOwnershipHistory: PropertyOwnershipHistory[];
   propertyStatusHistory: PropertyStatusHistory[];
+  documentTemplates: DocumentTemplate[];
+  documentTemplateVersions: DocumentTemplateVersion[];
+  generatedDocuments: GeneratedDocument[];
 }
 
 const DB_FILE_PATH = path.join(process.cwd(), "db_store.json");
@@ -321,6 +386,9 @@ export function loadDatabase(): DatabaseSchema {
     if (!parsed.propertyMutationItems) parsed.propertyMutationItems = [];
     if (!parsed.propertyOwnershipHistory) parsed.propertyOwnershipHistory = [];
     if (!parsed.propertyStatusHistory) parsed.propertyStatusHistory = [];
+    if (!parsed.documentTemplates) parsed.documentTemplates = [];
+    if (!parsed.documentTemplateVersions) parsed.documentTemplateVersions = [];
+    if (!parsed.generatedDocuments) parsed.generatedDocuments = [];
     
     return parsed;
   } catch (err) {
@@ -888,6 +956,89 @@ function getSeedData(): DatabaseSchema {
     propertyMutations: [],
     propertyMutationItems: [],
     propertyOwnershipHistory: [],
-    propertyStatusHistory: []
+    propertyStatusHistory: [],
+    documentTemplateVersions: [
+      {
+        id: 1,
+        templateId: 1,
+        versionNumber: 1,
+        headerHtml: `<div style="text-align: center; font-family: sans-serif; border-bottom: 2px solid #1a365d; padding-bottom: 8px;">\n  <h2 style="margin: 0; color: #1a365d; font-size: 18px;">{{lgu_name}}</h2>\n  <h4 style="margin: 2px 0; color: #4a5568; font-size: 11px; font-weight: normal;">Province of {{province}}, Municipality of {{municipality}}</h4>\n  <p style="margin: 2px 0 0 0; font-size: 10px; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; color: #718096;">{{office_name}}</p>\n</div>`,
+        bodyHtml: `<div style="font-family: sans-serif; padding-top: 15px;">\n  <div style="text-align: center; margin-bottom: 15px;">\n    <h3 style="margin: 0; text-transform: uppercase; font-size: 15px; letter-spacing: 1px; color: #2d3748;">{{document_title}}</h3>\n    <p style="margin: 3px 0; font-size: 11px;">Statement No: <span style="font-family: monospace; font-weight: bold; color: #e53e3e;">{{document_number}}</span></p>\n  </div>\n\n  <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 15px;">\n    <tr>\n      <td style="padding: 4px; font-weight: bold; width: 18%; color: #4a5568;">Taxpayer Name:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; width: 32%; font-weight: 500;">{{taxpayer_name}}</td>\n      <td style="padding: 4px; font-weight: bold; width: 18%; color: #4a5568;">Property PIN:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; font-family: monospace; width: 32%; font-weight: 500;">{{property_pin}}</td>\n    </tr>\n    <tr>\n      <td style="padding: 4px; font-weight: bold; color: #4a5568;">Location:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0;">{{property_location}}</td>\n      <td style="padding: 4px; font-weight: bold; color: #4a5568;">Property TDN:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; font-family: monospace;">{{property_tdn}}</td>\n    </tr>\n    <tr>\n      <td style="padding: 4px; font-weight: bold; color: #4a5568;">Barangay:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0;">{{barangay}}</td>\n      <td style="padding: 4px; font-weight: bold; color: #4a5568;">Classification:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; text-transform: capitalize;">{{classification}}</td>\n    </tr>\n  </table>\n\n  <div style="background-color: #f7fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px; margin-bottom: 15px;">\n    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">\n      <tr>\n        <td style="padding: 3px; font-weight: bold; color: #4a5568; width: 25%;">Fair Market Value:</td>\n        <td style="padding: 3px; text-align: right; width: 25%;">Php {{fair_market_value}}</td>\n        <td style="padding: 3px; font-weight: bold; color: #4a5568; width: 25%; padding-left: 15px;">Basic RPT Rate:</td>\n        <td style="padding: 3px; text-align: right; width: 25%;">{{basic_rpt_rate}}%</td>\n      </tr>\n      <tr>\n        <td style="padding: 3px; font-weight: bold; color: #4a5568;">Assessment Level:</td>\n        <td style="padding: 3px; text-align: right;">{{assessment_level}}%</td>\n        <td style="padding: 3px; font-weight: bold; color: #4a5568; padding-left: 15px;">SEF Rate:</td>\n        <td style="padding: 3px; text-align: right;">{{sef_rate}}%</td>\n      </tr>\n      <tr style="border-top: 1px dashed #cbd5e0;">\n        <td style="padding: 5px 3px 3px 3px; font-weight: bold; color: #2d3748;">Assessed Value:</td>\n        <td style="padding: 5px 3px 3px 3px; text-align: right; font-weight: bold; color: #2b6cb0;">Php {{assessed_value}}</td>\n        <td style="padding: 5px 3px 3px 15px; font-weight: bold; color: #4a5568;">Billing Year:</td>\n        <td style="padding: 5px 3px 3px 3px; text-align: right; font-weight: bold; color: #2d3748;">{{billing_year}}</td>\n      </tr>\n    </table>\n  </div>\n\n  <h4 style="margin: 0 0 6px 0; font-size: 11px; text-transform: uppercase; color: #4a5568; letter-spacing: 0.5px;">Annual Calculation Breakdown</h4>\n  <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 20px;">\n    <thead>\n      <tr style="background-color: #1a365d; color: #fff; text-align: left;">\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: center;">Year</th>\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: right;">Basic Tax</th>\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: right;">SEF Tax</th>\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: right;">Accrued Penalty</th>\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: right;">Discounts</th>\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: right;">Total Amount</th>\n      </tr>\n    </thead>\n    <tbody>\n      {{#billing_items}}\n      <tr>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold;">{{year}}</td>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: right;">Php {{basic_rpt}}</td>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: right;">Php {{sef}}</td>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: right; color: #c53030;">Php {{penalty}}</td>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: right; color: #2f855a;">Php {{discount}}</td>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: #2d3748;">Php {{total}}</td>\n      </tr>\n      {{/billing_items}}\n      <tr style="background-color: #ebf8ff; font-weight: bold; font-size: 11px;">\n        <td colspan="5" style="padding: 7px; border: 1px solid #bee3f8; text-align: right; color: #2b6cb0;">GRAND TOTAL RPT OUTSTANDING LIABILITY:</td>\n        <td style="padding: 7px; border: 1px solid #bee3f8; text-align: right; color: #2b6cb0; font-size: 11.5px;">Php {{total_due}}</td>\n      </tr>\n    </tbody>\n  </table>\n\n  <div style="margin-top: 15px; border-top: 1px solid #cbd5e0; padding-top: 8px;">\n    <p style="font-size: 9px; color: #718096; line-height: 1.4; margin: 0;">\n      NOTICE: Form produced on {{generated_at}} under code {{verification_code}}. The Local Government Unit of Paete charges tax interests under Article 250 with peak penalty caps of {{max_penalty}}%. For immediate verification or dispute resolution, access via LGU sandbox <a href="{{verification_url}}">{{verification_url}}</a> or scan the QR signature placeholder.\n    </p>\n  </div>\n</div>`,
+        footerHtml: `<div style="border-top: 1px solid #e2e8f0; padding-top: 6px; font-family: sans-serif; font-size: 9px; text-align: center; color: #a0aec0; width: 100%;">\n  <span>Prepared By: <strong>{{prepared_by}}</strong> | Approved By: <strong>{{approved_by}}</strong></span>\n</div>`,
+        cssStyles: `body { font-family: sans-serif; }`,
+        changeSummary: "Initial Standard Statement of Account version release.",
+        createdBy: "System Administrator",
+        createdAt: "2026-05-20T12:00:00Z"
+      }
+    ],
+    documentTemplates: [
+      {
+        id: 1,
+        templateCode: "SOA",
+        templateName: "Official Statement of Account (SOA)",
+        templateCategory: "billing",
+        documentType: "Statement of Account",
+        description: "Official statement displaying real property tax assessments, penalty breakdowns, and total municipal liabilities.",
+        paperSize: "Letter",
+        orientation: "portrait",
+        marginTop: 10,
+        marginRight: 10,
+        marginBottom: 10,
+        marginLeft: 10,
+        headerHtml: `<div style="text-align: center; font-family: sans-serif; border-bottom: 2px solid #1a365d; padding-bottom: 8px;">\n  <h2 style="margin: 0; color: #1a365d; font-size: 18px;">{{lgu_name}}</h2>\n  <h4 style="margin: 2px 0; color: #4a5568; font-size: 11px; font-weight: normal;">Province of {{province}}, Municipality of {{municipality}}</h4>\n  <p style="margin: 2px 0 0 0; font-size: 10px; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; color: #718096;">{{office_name}}</p>\n</div>`,
+        bodyHtml: `<div style="font-family: sans-serif; padding-top: 15px;">\n  <div style="text-align: center; margin-bottom: 15px;">\n    <h3 style="margin: 0; text-transform: uppercase; font-size: 15px; letter-spacing: 1px; color: #2d3748;">{{document_title}}</h3>\n    <p style="margin: 3px 0; font-size: 11px;">Statement No: <span style="font-family: monospace; font-weight: bold; color: #e53e3e;">{{document_number}}</span></p>\n  </div>\n\n  <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 15px;">\n    <tr>\n      <td style="padding: 4px; font-weight: bold; width: 18%; color: #4a5568;">Taxpayer Name:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; width: 32%; font-weight: 500;">{{taxpayer_name}}</td>\n      <td style="padding: 4px; font-weight: bold; width: 18%; color: #4a5568;">Property PIN:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; font-family: monospace; width: 32%; font-weight: 500;">{{property_pin}}</td>\n    </tr>\n    <tr>\n      <td style="padding: 4px; font-weight: bold; color: #4a5568;">Location:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0;">{{property_location}}</td>\n      <td style="padding: 4px; font-weight: bold; color: #4a5568;">Property TDN:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; font-family: monospace;">{{property_tdn}}</td>\n    </tr>\n    <tr>\n      <td style="padding: 4px; font-weight: bold; color: #4a5568;">Barangay:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0;">{{barangay}}</td>\n      <td style="padding: 4px; font-weight: bold; color: #4a5568;">Classification:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; text-transform: capitalize;">{{classification}}</td>\n    </tr>\n  </table>\n\n  <div style="background-color: #f7fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px; margin-bottom: 15px;">\n    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">\n      <tr>\n        <td style="padding: 3px; font-weight: bold; color: #4a5568; width: 25%;">Fair Market Value:</td>\n        <td style="padding: 3px; text-align: right; width: 25%;">Php {{fair_market_value}}</td>\n        <td style="padding: 3px; font-weight: bold; color: #4a5568; width: 25%; padding-left: 15px;">Basic RPT Rate:</td>\n        <td style="padding: 3px; text-align: right; width: 25%;">{{basic_rpt_rate}}%</td>\n      </tr>\n      <tr>\n        <td style="padding: 3px; font-weight: bold; color: #4a5568;">Assessment Level:</td>\n        <td style="padding: 3px; text-align: right;">{{assessment_level}}%</td>\n        <td style="padding: 3px; font-weight: bold; color: #4a5568; padding-left: 15px;">SEF Rate:</td>\n        <td style="padding: 3px; text-align: right;">{{sef_rate}}%</td>\n      </tr>\n      <tr style="border-top: 1px dashed #cbd5e0;">\n        <td style="padding: 5px 3px 3px 3px; font-weight: bold; color: #2d3748;">Assessed Value:</td>\n        <td style="padding: 5px 3px 3px 3px; text-align: right; font-weight: bold; color: #2b6cb0;">Php {{assessed_value}}</td>\n        <td style="padding: 5px 3px 3px 15px; font-weight: bold; color: #4a5568;">Billing Year:</td>\n        <td style="padding: 5px 3px 3px 3px; text-align: right; font-weight: bold; color: #2d3748;">{{billing_year}}</td>\n      </tr>\n    </table>\n  </div>\n\n  <h4 style="margin: 0 0 6px 0; font-size: 11px; text-transform: uppercase; color: #4a5568; letter-spacing: 0.5px;">Annual Calculation Breakdown</h4>\n  <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 20px;">\n    <thead>\n      <tr style="background-color: #1a365d; color: #fff; text-align: left;">\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: center;">Year</th>\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: right;">Basic Tax</th>\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: right;">SEF Tax</th>\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: right;">Accrued Penalty</th>\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: right;">Discounts</th>\n        <th style="padding: 5px; border: 1px solid #1a365d; text-align: right;">Total Amount</th>\n      </tr>\n    </thead>\n    <tbody>\n      {{#billing_items}}\n      <tr>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold;">{{year}}</td>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: right;">Php {{basic_rpt}}</td>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: right;">Php {{sef}}</td>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: right; color: #c53030;">Php {{penalty}}</td>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: right; color: #2f855a;">Php {{discount}}</td>\n        <td style="padding: 5px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: #2d3748;">Php {{total}}</td>\n      </tr>\n      {{/billing_items}}\n      <tr style="background-color: #ebf8ff; font-weight: bold; font-size: 11px;">\n        <td colspan="5" style="padding: 7px; border: 1px solid #bee3f8; text-align: right; color: #2b6cb0;">GRAND TOTAL RPT OUTSTANDING LIABILITY:</td>\n        <td style="padding: 7px; border: 1px solid #bee3f8; text-align: right; color: #2b6cb0; font-size: 11.5px;">Php {{total_due}}</td>\n      </tr>\n    </tbody>\n  </table>\n\n  <div style="margin-top: 15px; border-top: 1px solid #cbd5e0; padding-top: 8px;">\n    <p style="font-size: 9px; color: #718096; line-height: 1.4; margin: 0;">\n      NOTICE: Form produced on {{generated_at}} under code {{verification_code}}. The Local Government Unit of Paete charges tax interests under Article 250 with peak penalty caps of {{max_penalty}}%. For immediate verification or dispute resolution, access via LGU sandbox <a href="{{verification_url}}">{{verification_url}}</a> or scan the QR signature placeholder.\n    </p>\n  </div>\n</div>`,
+        footerHtml: `<div style="border-top: 1px solid #e2e8f0; padding-top: 6px; font-family: sans-serif; font-size: 9px; text-align: center; color: #a0aec0; width: 100%;">\n  <span>Prepared By: <strong>{{prepared_by}}</strong> | Approved By: <strong>{{approved_by}}</strong></span>\n</div>`,
+        cssStyles: `body { font-family: sans-serif; }`,
+        availableVariables: JSON.stringify([
+          "lgu_name", "province", "municipality", "office_name", "document_title", "document_number",
+          "taxpayer_name", "property_pin", "property_location", "property_tdn", "barangay", "classification",
+          "fair_market_value", "assessment_level", "assessed_value", "billing_year", "basic_rpt_rate", "sef_rate",
+          "total_due", "prepared_by", "approved_by", "generated_at", "verification_code", "verification_url"
+        ]),
+        isDefault: true,
+        isActive: true,
+        status: "approved" as const,
+        createdBy: "System Administrator",
+        reviewedBy: "System Administrator",
+        approvedBy: "System Administrator",
+        approvedAt: "2026-05-20T12:00:00Z",
+        createdAt: "2026-05-20T12:00:00Z",
+        updatedAt: "2026-05-20T12:00:00Z",
+        deletedAt: null
+      },
+      {
+        id: 2,
+        templateCode: "OR",
+        templateName: "Official Payment Receipt (OR)",
+        templateCategory: "receipt",
+        documentType: "Official Receipt",
+        description: "Official tax collection layout formatting payment details, date, collector cashier signature, and settled amount.",
+        paperSize: "Letter",
+        orientation: "portrait",
+        marginTop: 10,
+        marginRight: 10,
+        marginBottom: 10,
+        marginLeft: 10,
+        headerHtml: `<div style="text-align: center; font-family: sans-serif; border-bottom: 2px solid #2f855a; padding-bottom: 8px;">\n  <h2 style="margin: 0; color: #2f855a; font-size: 16px;">{{lgu_name}}</h2>\n  <p style="margin: 2px 0 0 0; font-size: 9px; text-transform: uppercase; font-weight: bold; color: #718096;">OFFICIAL TREASURY RECEIPT</p>\n</div>`,
+        bodyHtml: `<div style="font-family: sans-serif; padding-top: 10px; font-size: 11px;">\n  <div style="text-align: center; margin-bottom: 12px;">\n    <h3 style="margin: 0; color: #2f855a; text-transform: uppercase; font-size: 13px;">OFFICIAL RECEIPT</h3>\n    <p style="margin: 2px 0; font-size: 10px;">OR Number: <span style="font-family: monospace; font-weight: bold; color: #2f855a; font-size: 12px;">{{or_number}}</span></p>\n  </div>\n\n  <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">\n    <tr>\n      <td style="padding: 4px; font-weight: bold; width: 25%;">Payment Date:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; width: 75%;">{{payment_date}}</td>\n    </tr>\n    <tr>\n      <td style="padding: 4px; font-weight: bold;">Payor Name:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0;">{{taxpayer_name}}</td>\n    </tr>\n    <tr>\n      <td style="padding: 4px; font-weight: bold;">Reference Document:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; font-family: monospace;">{{document_number}}</td>\n    </tr>\n    <tr>\n      <td style="padding: 4px; font-weight: bold;">Settled PIN Details:</td>\n      <td style="padding: 4px; border-bottom: 1px solid #e2e8f0; font-family: monospace;">{{property_pin}}</td>\n    </tr>\n  </table>\n\n  <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px;">\n    <thead>\n      <tr style="background-color: #f7fafc; border-bottom: 1px solid #cbd5e0; text-align: left; font-weight: bold;">\n        <th style="padding: 4px;">Collection Item</th>\n        <th style="padding: 4px; text-align: right;">Paid Amount</th>\n      </tr>\n    </thead>\n    <tbody>\n      <tr>\n        <td style="padding: 4px;">Real Property Basis Tax Settler</td>\n        <td style="padding: 4px; text-align: right;">Php {{amount_paid}}</td>\n      </tr>\n      <tr style="border-top: 1px solid #e2e8f0; font-weight: bold;">\n        <td style="padding: 4px; text-align: right;">TOTAL COLLECTED AMOUNT:</td>\n        <td style="padding: 4px; text-align: right; color: #2f855a; font-size: 11px;">Php {{amount_paid}}</td>\n      </tr>\n    </tbody>\n  </table>\n\n  <div style="background-color: #f0fff4; border: 1px solid #c6f6d5; padding: 8px; border-radius: 4px; font-size: 9px; color: #22543d; line-height: 1.3;">\n    This serves as valid proof of real property taxes clearance for the designated billing year under state record. Secure verification is catalogued at {{verification_url}} using hash validation.\n  </div>\n</div>`,
+        footerHtml: `<div style="border-top: 1px dashed #2f855a; padding-top: 6px; font-family: sans-serif; font-size: 9px; display: flex; justify-content: space-between; align-items: center; color: #718096;">\n  <span>Collector Cashier: <strong>{{cashier_name}}</strong></span>\n  <span>Audit Reference: {{verification_code}}</span>\n</div>`,
+        cssStyles: `body { font-family: sans-serif; }`,
+        availableVariables: JSON.stringify([
+          "lgu_name", "province", "municipality", "or_number", "payment_date", "taxpayer_name",
+          "document_number", "property_pin", "amount_paid", "cashier_name", "verification_url", "verification_code"
+        ]),
+        isDefault: true,
+        isActive: true,
+        status: "approved" as const,
+        createdBy: "System Administrator",
+        reviewedBy: "System Administrator",
+        approvedBy: "System Administrator",
+        approvedAt: "2026-05-20T12:00:00Z",
+        createdAt: "2026-05-20T12:00:00Z",
+        updatedAt: "2026-05-20T12:00:00Z",
+        deletedAt: null
+      }
+    ],
+    generatedDocuments: []
   };
 }

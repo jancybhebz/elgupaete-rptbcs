@@ -57,7 +57,8 @@ export default function Sidebar({
     { id: "attachments", label: "Attachment Vault", icon: Paperclip, roles: ["System Administrator", "Municipal Assessor", "Assessor Staff", "Municipal Treasurer", "Treasury Supervisor"] },
     { id: "reports", label: "LGU Reports Desk", icon: FileBarChart, roles: ["System Administrator", "Municipal Treasurer", "Treasury Supervisor", "Report Viewer", "Auditor / Read-only User"] },
     { id: "logs", label: "Audit Trails", icon: History, roles: ["System Administrator", "Auditor / Read-only User"] },
-    { id: "settings", label: "System Config", icon: Settings, roles: ["System Administrator"] }
+    { id: "settings", label: "System Config", icon: Settings, roles: ["System Administrator"] },
+    { id: "templates", label: "Document Templates", icon: FileSpreadsheet, roles: ["System Administrator"] }
   ];
 
   const currentRole = currentUser?.role || "System Administrator";

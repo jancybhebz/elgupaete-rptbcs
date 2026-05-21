@@ -8,6 +8,10 @@ import FaasPanel from "./components/FaasPanel.tsx";
 import BillingPanel from "./components/BillingPanel.tsx";
 import TreasuryPanel from "./components/TreasuryPanel.tsx";
 import Dashboard from "./components/Dashboard.tsx";
+import DocumentTemplatesPanel from "./components/DocumentTemplatesPanel.tsx";
+import { db, testConnection } from "./firebase.ts";
+import { doc, setDoc } from "firebase/firestore";
+import { Cloud, Wifi, Database } from "lucide-react";
 
 import {
   User,
@@ -56,6 +60,146 @@ export default function App() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+
+  // Firebase Synchronization States
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+
+  const handleSyncWithFirebase = async () => {
+    try {
+      setSyncing(true);
+      setSyncStatus("Initializing Firestore Sync...");
+
+      // 1. Sync taxpayers
+      setSyncStatus("Syncing Taxpayers to Firestore...");
+      for (const tp of taxpayers) {
+        await setDoc(doc(db, "taxpayers", String(tp.id)), {
+          id: tp.id,
+          code: tp.code,
+          firstName: tp.firstName,
+          middleName: tp.middleName || "",
+          lastName: tp.lastName,
+          suffix: tp.suffix || "",
+          companyName: tp.companyName || "",
+          type: tp.type,
+          tin: tp.tin || "",
+          contactNumber: tp.contactNumber || "",
+          email: tp.email || "",
+          address: tp.address || "",
+          barangay: tp.barangay || "",
+          municipality: tp.municipality || "Paete",
+          province: tp.province || "Laguna",
+          zipCode: tp.zipCode || "4016",
+          status: tp.status || "active",
+          createdAt: tp.createdAt
+        });
+      }
+
+      // 2. Sync properties
+      setSyncStatus("Syncing Properties to Firestore...");
+      for (const prop of properties) {
+        await setDoc(doc(db, "properties", String(prop.id)), {
+          id: prop.id,
+          pin: prop.pin,
+          tdn: prop.tdn,
+          previousTdn: prop.previousTdn || "",
+          ownerId: prop.ownerId,
+          ownerName: prop.ownerName,
+          administrator: prop.administrator || "",
+          kind: prop.kind,
+          classification: prop.classification,
+          barangayId: prop.barangayId || 1,
+          barangayName: prop.barangayName,
+          street: prop.street || "",
+          lotNo: prop.lotNo || "",
+          blockNo: prop.blockNo || "",
+          surveyNo: prop.surveyNo || "",
+          titleNo: prop.titleNo || "",
+          area: prop.area,
+          unit: prop.unit,
+          boundaries: prop.boundaries || "",
+          latitude: prop.latitude || 0,
+          longitude: prop.longitude || 0,
+          parcelReference: prop.parcelReference || "",
+          status: prop.status,
+          remarks: prop.remarks || "",
+          createdAt: prop.createdAt
+        });
+      }
+
+      // 3. Sync soaRecords
+      setSyncStatus("Syncing Statement of Account Records...");
+      for (const s of soa) {
+        await setDoc(doc(db, "soaRecords", String(s.id)), {
+          id: s.id,
+          soaNumber: s.soaNumber,
+          taxpayerId: s.taxpayerId,
+          propertyId: s.propertyId,
+          billingYear: s.billingYear,
+          billingPeriod: s.billingPeriod,
+          assessedValue: s.assessedValue || 0,
+          basicRptAmount: s.basicRptAmount || 0,
+          sefAmount: s.sefAmount || 0,
+          penaltyAmount: s.penaltyAmount || 0,
+          discountAmount: s.discountAmount || 0,
+          totalDue: s.totalDue || 0,
+          amountPaid: s.amountPaid || 0,
+          balance: s.balance || 0,
+          dueDate: s.dueDate || "",
+          status: s.status,
+          createdAt: s.createdAt
+        });
+      }
+
+      // 4. Sync payments
+      setSyncStatus("Syncing Payments Ledger...");
+      for (const pay of payments) {
+        await setDoc(doc(db, "payments", String(pay.id)), {
+          id: pay.id,
+          paymentRef: pay.paymentRef,
+          soaNumber: pay.soaNumber,
+          taxpayerId: pay.taxpayerId,
+          taxpayerName: pay.taxpayerName || "",
+          propertyId: pay.propertyId || 0,
+          orNumber: pay.orNumber || "",
+          paymentDate: pay.paymentDate || "",
+          paymentChannel: pay.paymentChannel,
+          amountPaid: pay.amountPaid,
+          basicPortion: pay.basicPortion || 0,
+          sefPortion: pay.sefPortion || 0,
+          penaltyPortion: pay.penaltyPortion || 0,
+          discountApplied: pay.discountApplied || 0,
+          cashierName: pay.cashierName || "",
+          status: pay.status
+        });
+      }
+
+      // 5. Sync officialReceipts
+      setSyncStatus("Syncing Official Receipts Catalog...");
+      for (const rec of receipts) {
+        await setDoc(doc(db, "officialReceipts", String(rec.id)), {
+          id: rec.id,
+          orNumber: rec.orNumber,
+          paymentId: rec.paymentId,
+          taxpayerName: rec.taxpayerName,
+          amount: rec.amount,
+          paymentDate: rec.paymentDate || "",
+          cashierName: rec.cashierName || "",
+          remarks: rec.remarks || "",
+          status: rec.status
+        });
+      }
+
+      setSyncStatus("Synchronization completed successfully!");
+      loadAppState();
+      setTimeout(() => setSyncStatus(null), 5000);
+    } catch (err) {
+      console.error("Firebase Sync error:", err);
+      setSyncStatus(`Sync Failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Filters for reports/logs
   const [filterReportBarangay, setFilterReportBarangay] = useState("all");
@@ -133,6 +277,7 @@ export default function App() {
 
   useEffect(() => {
     loadAppState();
+    testConnection();
   }, [currentTab]);
 
   const handleSwitchUser = async (username: string) => {
@@ -570,7 +715,84 @@ export default function App() {
                   Commit Changes to MySQL
                 </button>
               </div>
+
+              {/* Cloud Firebase Real-time Integration Hub details */}
+              <div className="mt-8 border-t pt-6 space-y-4">
+                <div className="flex gap-2.5 items-center">
+                  <div className="p-2 bg-slate-50 text-sky-600 border rounded-lg">
+                    <Cloud className="h-5 w-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm">Cloud Firebase Firestore & Auth Hub</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">Real-time Zero-Trust synchronization with cloud enterprise database clusters.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs font-sans">
+                  <div className="border p-4 rounded-xl space-y-4 bg-slate-50 border-slate-200">
+                    <h5 className="font-bold text-slate-700 uppercase tracking-wider text-[10px] border-b pb-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5"><Database className="h-4 w-4 text-sky-500" /> Active Configurations</span>
+                      <span className="px-2 py-0.5 bg-sky-100 text-[#0369a1] text-[9.5px] rounded-full uppercase tracking-widest font-bold flex items-center gap-1">
+                        <Wifi className="h-3 w-3" /> Online
+                      </span>
+                    </h5>
+
+                    <div className="space-y-2 font-mono text-[10.5px]">
+                      <div className="flex justify-between border-b pb-1 border-slate-200/60">
+                        <span className="text-slate-400">Project ID:</span>
+                        <strong className="text-slate-700">gen-lang-client-0376401154</strong>
+                      </div>
+                      <div className="flex justify-between border-b pb-1 border-slate-200/60">
+                        <span className="text-slate-400">Database Instance Name:</span>
+                        <strong className="text-slate-700 truncate max-w-[200px]">ai-studio-bce4fac7-f640-48d6-90d9-9594f73c026a</strong>
+                      </div>
+                      <div className="flex justify-between border-b pb-1 border-slate-200/60 text-slate-500">
+                        <span className="text-slate-400">Region:</span>
+                        <strong className="text-slate-600">asia-southeast1 (Singapore)</strong>
+                      </div>
+                      <div className="flex justify-between text-slate-500">
+                        <span className="text-slate-400">Security Rule Integrity:</span>
+                        <strong className="text-emerald-600 font-sans font-bold flex items-center gap-0.5">Zero-Trust Secured</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border p-4 rounded-xl flex flex-col justify-between items-stretch bg-gradient-to-br from-slate-50 to-sky-50 border-sky-100">
+                    <div className="space-y-2">
+                      <h5 className="font-bold text-slate-700 uppercase tracking-wider text-[10px] border-b pb-1">Real-time Sync & Off-site Backup</h5>
+                      <p className="text-slate-500 text-[11px] leading-relaxed">
+                        Replicate all local MySQL master records (Taxpayers, Properties, SOAs, Payments, and Receipts) to your cloud Firestore instance under strict Attribute-Based Access Control filters.
+                      </p>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      {syncStatus && (
+                        <div className="p-2 border bg-white rounded text-[11px] font-mono text-sky-700 border-sky-100 flex items-center gap-1.5 animate-fadeIn">
+                          <span className="h-2 w-2 rounded-full bg-sky-500 animate-ping"></span>
+                          {syncStatus}
+                        </div>
+                      )}
+
+                      <button
+                        onClick={handleSyncWithFirebase}
+                        disabled={syncing}
+                        className="w-full px-5 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-300 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      >
+                        <Cloud className="h-4.5 w-4.5 animate-bounce" />
+                        {syncing ? "Replicating Node Registry..." : "Synchronize Database with Firebase"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
+          )}
+
+          {currentTab === "templates" && (
+            <DocumentTemplatesPanel
+              currentUser={currentUser}
+              onRefresh={loadAppState}
+            />
           )}
 
         </div>

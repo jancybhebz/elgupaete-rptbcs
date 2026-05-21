@@ -1,0 +1,178 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System administrator and clerk accounts for the real property tax platform",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number", "description": "Unique identifier" },
+        "username": { "type": "string", "description": "Login handle" },
+        "name": { "type": "string", "description": "Full staff name" },
+        "email": { "type": "string", "format": "email", "description": "Contact email address" },
+        "role": { "type": "string", "description": "Staff access permissions level" },
+        "office": { "type": "string", "description": "Assigned office" },
+        "status": { "type": "string", "enum": ["active", "inactive", "locked"], "description": "Status constraint" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "username", "name", "email", "role", "status", "createdAt"]
+    },
+    "Taxpayer": {
+      "title": "Taxpayer",
+      "description": "Taxpayer declaration entities",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "code": { "type": "string" },
+        "firstName": { "type": "string" },
+        "middleName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "suffix": { "type": "string" },
+        "companyName": { "type": "string" },
+        "type": { "type": "string", "enum": ["individual", "corporation", "estate", "government"] },
+        "tin": { "type": "string" },
+        "contactNumber": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "address": { "type": "string" },
+        "barangay": { "type": "string" },
+        "municipality": { "type": "string" },
+        "province": { "type": "string" },
+        "zipCode": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "remarks": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "code", "lastName", "type", "status", "createdAt"]
+    },
+    "Property": {
+      "title": "Property",
+      "description": "Real Property Unit declaration registry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "pin": { "type": "string" },
+        "tdn": { "type": "string" },
+        "previousTdn": { "type": "string" },
+        "ownerId": { "type": "number" },
+        "ownerName": { "type": "string" },
+        "administrator": { "type": "string" },
+        "kind": { "type": "string", "enum": ["land", "building", "machinery"] },
+        "classification": { "type": "string", "enum": ["residential", "commercial", "agricultural", "industrial", "mineral", "special"] },
+        "barangayId": { "type": "number" },
+        "barangayName": { "type": "string" },
+        "street": { "type": "string" },
+        "lotNo": { "type": "string" },
+        "blockNo": { "type": "string" },
+        "surveyNo": { "type": "string" },
+        "titleNo": { "type": "string" },
+        "area": { "type": "number" },
+        "unit": { "type": "string", "enum": ["sqm", "hectare"] },
+        "boundaries": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "parcelReference": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "cancelled", "revised", "transferred", "subdivided", "consolidated"] },
+        "remarks": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "pin", "tdn", "ownerId", "ownerName", "kind", "classification", "barangayName", "area", "unit", "status", "createdAt"]
+    },
+    "SoaRecord": {
+      "title": "SoaRecord",
+      "description": "Statement of Account billing information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "soaNumber": { "type": "string" },
+        "taxpayerId": { "type": "number" },
+        "propertyId": { "type": "number" },
+        "billingYear": { "type": "number" },
+        "billingPeriod": { "type": "string", "enum": ["annual", "q1", "q2", "q3", "q4"] },
+        "assessedValue": { "type": "number" },
+        "basicRptAmount": { "type": "number" },
+        "sefAmount": { "type": "number" },
+        "penaltyAmount": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "totalDue": { "type": "number" },
+        "amountPaid": { "type": "number" },
+        "balance": { "type": "number" },
+        "dueDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["draft", "issued", "partially paid", "fully paid", "cancelled", "expired"] },
+        "preparedBy": { "type": "string" },
+        "approvedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "verificationCode": { "type": "string" }
+      },
+      "required": ["id", "soaNumber", "taxpayerId", "propertyId", "billingYear", "billingPeriod", "totalDue", "status", "createdAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "RPT payment processing ledger receipts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "paymentRef": { "type": "string" },
+        "soaNumber": { "type": "string" },
+        "taxpayerId": { "type": "number" },
+        "taxpayerName": { "type": "string" },
+        "propertyId": { "type": "number" },
+        "orNumber": { "type": "string" },
+        "paymentDate": { "type": "string", "format": "date-time" },
+        "paymentChannel": { "type": "string", "enum": ["Cash", "Check", "Bank Transfer", "LandBank LinkBiz", "GCash", "Maya", "eGovPay"] },
+        "amountPaid": { "type": "number" },
+        "basicPortion": { "type": "number" },
+        "sefPortion": { "type": "number" },
+        "penaltyPortion": { "type": "number" },
+        "discountApplied": { "type": "number" },
+        "cashierName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "posted", "voided", "cancelled", "reversed"] },
+        "voidReason": { "type": "string" },
+        "voidedBy": { "type": "string" }
+      },
+      "required": ["id", "paymentRef", "soaNumber", "taxpayerId", "amountPaid", "paymentChannel", "status"]
+    },
+    "OfficialReceipt": {
+      "title": "OfficialReceipt",
+      "description": "Cryptographically sealed or general treasury-issued raw receipts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "orNumber": { "type": "string" },
+        "paymentId": { "type": "number" },
+        "taxpayerName": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentDate": { "type": "string", "format": "date-time" },
+        "cashierName": { "type": "string" },
+        "remarks": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "voided"] },
+        "voidReason": { "type": "string" }
+      },
+      "required": ["id", "orNumber", "paymentId", "taxpayerName", "amount", "status"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "Admin and staff collection accounts"
+    },
+    "taxpayers": {
+      "schema": "Taxpayer",
+      "description": "Taxpayers list master records"
+    },
+    "properties": {
+      "schema": "Property",
+      "description": "Municipal real properties and classifications"
+    },
+    "soaRecords": {
+      "schema": "SoaRecord",
+      "description": "Statements of Account issued by the billing system"
+    },
+    "payments": {
+      "schema": "Payment",
+      "description": "Payment records received"
+    },
+    "officialReceipts": {
+      "schema": "OfficialReceipt",
+      "description": "Official Receipts catalogued corresponding to payments"
+    }
+  }
+}

@@ -15,6 +15,7 @@ import {
   OfficialReceipt,
   Attachment
 } from "./server/dbService.ts";
+import documentRouter from "./server/documentRoutes.ts";
 
 async function startServer() {
   const app = express();
@@ -22,6 +23,7 @@ async function startServer() {
 
   // Midlleware
   app.use(express.json());
+  app.use(documentRouter);
 
   // Static login session state
   let currentSession: User | null = null;

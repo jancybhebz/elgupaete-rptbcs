@@ -271,3 +271,66 @@ export interface PropertyStatusHistory {
   remarks: string;
 }
 
+export interface DocumentTemplate {
+  id: number;
+  templateCode: string;
+  templateName: string;
+  templateCategory: string;
+  documentType: string;
+  description: string;
+  paperSize: "A4" | "Letter" | "Legal" | "Custom";
+  orientation: "portrait" | "landscape";
+  marginTop: number;
+  marginRight: number;
+  marginBottom: number;
+  marginLeft: number;
+  headerHtml: string;
+  bodyHtml: string;
+  footerHtml: string;
+  cssStyles: string;
+  availableVariables: string; // JSON array of string
+  isDefault: boolean;
+  isActive: boolean;
+  status: "draft" | "for_review" | "approved" | "archived";
+  createdBy: string;
+  reviewedBy: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface DocumentTemplateVersion {
+  id: number;
+  templateId: number;
+  versionNumber: number;
+  headerHtml: string;
+  bodyHtml: string;
+  footerHtml: string;
+  cssStyles: string;
+  changeSummary: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface GeneratedDocument {
+  id: number;
+  templateId: number;
+  documentType: string;
+  sourceModule: string;
+  sourceRecordId: number;
+  documentNumber: string;
+  filePath: string;
+  fileHash: string;
+  verificationCode: string;
+  verificationUrl: string;
+  status: "draft" | "final" | "voided" | "cancelled";
+  generatedBy: string;
+  generatedAt: string;
+  metadata: string; // JSON representation
+  createdAt: string;
+  updatedAt: string;
+}
+
+

@@ -1,0 +1,161 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // First rule block is the default global safety deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -- REUSABLE HELPER PRIMITIVES --
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true);
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // -- SCHEMA VALIDATION STRATEGY --
+
+    function isValidUser(data) {
+      return data.id is int 
+        && data.username is string && data.username.size() >= 1 && data.username.size() <= 100
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 128
+        && data.email is string && data.email.size() >= 5
+        && data.role is string
+        && data.status is string && (data.status in ['active', 'inactive', 'locked'])
+        && data.createdAt is string;
+    }
+
+    function isValidTaxpayer(data) {
+      return data.id is int
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 128
+        && data.lastName is string && data.lastName.size() >= 1
+        && data.type is string && (data.type in ['individual', 'corporation', 'estate', 'government'])
+        && data.status is string && (data.status in ['active', 'inactive'])
+        && data.createdAt is string;
+    }
+
+    function isValidProperty(data) {
+      return data.id is int
+        && data.pin is string && data.pin.size() >= 3 && data.pin.size() <= 128
+        && data.tdn is string && data.tdn.size() >= 3 && data.tdn.size() <= 128
+        && data.ownerId is int
+        && data.ownerName is string && data.ownerName.size() >= 1
+        && data.kind is string && (data.kind in ['land', 'building', 'machinery'])
+        && data.classification is string && (data.classification in ['residential', 'commercial', 'agricultural', 'industrial', 'mineral', 'special'])
+        && data.barangayName is string && data.barangayName.size() >= 1
+        && data.area is number && data.area > 0
+        && data.unit is string && (data.unit in ['sqm', 'hectare'])
+        && data.status is string && (data.status in ['active', 'cancelled', 'revised', 'transferred', 'subdivided', 'consolidated'])
+        && data.createdAt is string;
+    }
+
+    function isValidSoaRecord(data) {
+      return data.id is int
+        && data.soaNumber is string && data.soaNumber.size() >= 1
+        && data.taxpayerId is int
+        && data.propertyId is int
+        && data.billingYear is int
+        && data.billingPeriod is string && (data.billingPeriod in ['annual', 'q1', 'q2', 'q3', 'q4'])
+        && data.totalDue is number && data.totalDue >= 0
+        && data.status is string && (data.status in ['draft', 'issued', 'partially paid', 'fully paid', 'cancelled', 'expired'])
+        && data.createdAt is string;
+    }
+
+    function isValidPayment(data) {
+      return data.id is int
+        && data.paymentRef is string && data.paymentRef.size() >= 1
+        && data.soaNumber is string && data.soaNumber.size() >= 1
+        && data.taxpayerId is int
+        && data.amountPaid is number && data.amountPaid > 0
+        && data.paymentChannel is string && (data.paymentChannel in ['Cash', 'Check', 'Bank Transfer', 'LandBank LinkBiz', 'GCash', 'Maya', 'eGovPay'])
+        && data.status is string && (data.status in ['pending', 'posted', 'voided', 'cancelled', 'reversed']);
+    }
+
+    function isValidOfficialReceipt(data) {
+      return data.id is int
+        && data.orNumber is string && data.orNumber.size() >= 1
+        && data.paymentId is int
+        && data.taxpayerName is string && data.taxpayerName.size() >= 1
+        && data.amount is number && data.amount > 0
+        && data.status is string && (data.status in ['active', 'voided']);
+    }
+
+    // -- SECURE MATCH BLOCKS --
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      // Only email verified and registered staff can write user records
+      allow create, update: if isEmailVerified() && isValidUser(incoming()) && (
+        // Prevent path variable spoofing
+        userId == request.auth.uid
+      );
+      allow delete: if false; // Users cannot be unceremoniously deleted
+    }
+
+    match /taxpayers/{taxpayerId} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidTaxpayer(incoming()) && isValidId(taxpayerId) && (
+        incoming().keys().hasAll(['id', 'code', 'lastName', 'type', 'status', 'createdAt'])
+      );
+      allow update: if isEmailVerified() && isValidTaxpayer(incoming()) && isValidId(taxpayerId) && (
+        // Ensure immutability of creation records
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt
+      );
+      allow delete: if false;
+    }
+
+    match /properties/{propertyId} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidProperty(incoming()) && isValidId(propertyId);
+      allow update: if isEmailVerified() && isValidProperty(incoming()) && isValidId(propertyId) && (
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt
+      );
+      allow delete: if false;
+    }
+
+    match /soaRecords/{soaId} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidSoaRecord(incoming()) && isValidId(soaId);
+      allow update: if isEmailVerified() && isValidSoaRecord(incoming()) && isValidId(soaId) && (
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt
+      );
+      allow delete: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidPayment(incoming()) && isValidId(paymentId);
+      allow update: if isEmailVerified() && isValidPayment(incoming()) && isValidId(paymentId) && (
+        incoming().id == existing().id
+      );
+      allow delete: if false;
+    }
+
+    match /officialReceipts/{orId} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidOfficialReceipt(incoming()) && isValidId(orId);
+      allow update: if isEmailVerified() && isValidOfficialReceipt(incoming()) && isValidId(orId) && (
+        incoming().id == existing().id
+      );
+      allow delete: if false;
+    }
+  }
+}
