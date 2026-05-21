@@ -1,0 +1,6 @@
+{
+  "name": "RPT Billing and Collection System",
+  "description": "Real Property Tax (RPT) Billing and Collection System for the LGU of Paete, Laguna",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
