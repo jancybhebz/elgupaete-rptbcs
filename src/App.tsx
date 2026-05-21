@@ -501,6 +501,8 @@ export default function App() {
               receipts={receipts}
               currentUser={currentUser}
               onRefresh={loadAppState}
+              taxpayers={taxpayers}
+              properties={properties}
             />
           )}
 
