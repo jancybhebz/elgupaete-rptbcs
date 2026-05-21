@@ -856,6 +856,621 @@ async function startServer() {
     });
   });
 
+  // 11. Property Mutation and Transactions Module Endpoints
+  app.get("/api/mutations", (req, res) => {
+    const db = loadDatabase();
+    res.json(db.propertyMutations || []);
+  });
+
+  app.get("/api/mutations/items", (req, res) => {
+    const db = loadDatabase();
+    res.json(db.propertyMutationItems || []);
+  });
+
+  app.get("/api/mutations/ownership-history", (req, res) => {
+    const db = loadDatabase();
+    res.json(db.propertyOwnershipHistory || []);
+  });
+
+  app.get("/api/mutations/status-history", (req, res) => {
+    const db = loadDatabase();
+    res.json(db.propertyStatusHistory || []);
+  });
+
+  app.post("/api/mutations", (req, res) => {
+    const db = loadDatabase();
+    const {
+      mutationType,
+      sourcePropertyId,
+      targetPropertyId,
+      taxpayerId,
+      previousTaxpayerId,
+      newTaxpayerId,
+      previousTdn,
+      newTdn,
+      previousPin,
+      newPin,
+      effectivityDate,
+      effectivityYear,
+      remarks,
+      metadata,
+      items
+    } = req.body;
+
+    const nextId = db.propertyMutations.length > 0 ? Math.max(...db.propertyMutations.map(m => m.id)) + 1 : 1;
+    
+    // Generate configurable number
+    const yearStr = effectivityYear || new Date().getFullYear();
+    let prefix = "MUT";
+    if (mutationType === "land_transfer" || mutationType === "ownership_transfer") prefix = "TRN";
+    else if (mutationType === "subdivision") prefix = "SUB";
+    else if (mutationType === "consolidation") prefix = "CON";
+    else if (mutationType === "assessment_revision") prefix = "REV";
+    else if (mutationType === "cancellation") prefix = "CAN";
+
+    // Filter by year and prefix
+    const typedMutations = db.propertyMutations.filter(m => m.mutationNumber.startsWith(`${prefix}-${yearStr}`));
+    const seq = typedMutations.length + 1;
+    const mutationNumber = `${prefix}-${yearStr}-${String(seq).padStart(6, "0")}`;
+
+    const newMutation = {
+      id: nextId,
+      mutationNumber,
+      mutationType,
+      sourcePropertyId: sourcePropertyId ? parseInt(sourcePropertyId) : null,
+      targetPropertyId: targetPropertyId ? parseInt(targetPropertyId) : null,
+      taxpayerId: taxpayerId ? parseInt(taxpayerId) : null,
+      previousTaxpayerId: previousTaxpayerId ? parseInt(previousTaxpayerId) : null,
+      newTaxpayerId: newTaxpayerId ? parseInt(newTaxpayerId) : null,
+      previousTdn: previousTdn || "",
+      newTdn: newTdn || "",
+      previousPin: previousPin || "",
+      newPin: newPin || "",
+      effectivityDate: effectivityDate || new Date().toISOString().split('T')[0],
+      effectivityYear: parseInt(effectivityYear) || new Date().getFullYear(),
+      status: "draft" as const,
+      requestedBy: currentSession?.name || "Renato Valdecantos",
+      reviewedBy: "",
+      approvedBy: "",
+      postedBy: "",
+      postedAt: null,
+      remarks: remarks || "",
+      metadata: typeof metadata === "string" ? metadata : JSON.stringify(metadata || {}),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    db.propertyMutations.push(newMutation);
+
+    // Save items if any
+    if (Array.isArray(items)) {
+      items.forEach(itm => {
+        const itemNextId = db.propertyMutationItems.length > 0 ? Math.max(...db.propertyMutationItems.map(i => i.id)) + 1 : 1;
+        db.propertyMutationItems.push({
+          id: itemNextId,
+          mutationId: nextId,
+          sourcePropertyId: itm.sourcePropertyId ? parseInt(itm.sourcePropertyId) : null,
+          targetPropertyId: itm.targetPropertyId ? parseInt(itm.targetPropertyId) : null,
+          itemType: itm.itemType || "lot",
+          area: parseFloat(itm.area) || 0,
+          fairMarketValue: parseFloat(itm.fairMarketValue) || 0,
+          assessmentLevel: parseFloat(itm.assessmentLevel) || 0,
+          assessedValue: parseFloat(itm.assessedValue) || 0,
+          oldValue: typeof itm.oldValue === "string" ? itm.oldValue : JSON.stringify(itm.oldValue || {}),
+          newValue: typeof itm.newValue === "string" ? itm.newValue : JSON.stringify(itm.newValue || {}),
+          remarks: itm.remarks || "",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    }
+
+    writeDatabase(db);
+    
+    logAction(
+      currentSession?.id || 1,
+      currentSession?.username || "admin",
+      "CREATE_MUTATION",
+      "Assessor Mutation Portal",
+      "property_mutations",
+      newMutation.id,
+      null,
+      newMutation
+    );
+
+    res.status(201).json(newMutation);
+  });
+
+  app.put("/api/mutations/:id", (req, res) => {
+    const id = parseInt(req.params.id);
+    const db = loadDatabase();
+    const idx = db.propertyMutations.findIndex(m => m.id === id);
+    if (idx === -1) return res.status(404).json({ message: "Mutation transaction not found." });
+
+    const m = db.propertyMutations[idx];
+    if (m.status === "posted") {
+      return res.status(400).json({ message: "Posted mutation transactions are locked and cannot be edited." });
+    }
+
+    // Prepare fields to update safely (avoid overwriting timestamps and ids unless specified)
+    const updated = {
+      ...m,
+      ...req.body,
+      id,
+      updatedAt: new Date().toISOString()
+    };
+
+    db.propertyMutations[idx] = updated;
+    writeDatabase(db);
+    res.json(updated);
+  });
+
+  app.post("/api/mutations/:id/transition", (req, res) => {
+    const id = parseInt(req.params.id);
+    const { action, reason, remarks: transRemarks } = req.body;
+    const db = loadDatabase();
+    const idx = db.propertyMutations.findIndex(m => m.id === id);
+    if (idx === -1) return res.status(404).json({ message: "Mutation transaction not found." });
+
+    const m = db.propertyMutations[idx];
+    if (m.status === "posted") {
+      return res.status(400).json({ message: "This transaction is already posted and locked." });
+    }
+
+    let nextStatus: "draft" | "for review" | "approved" | "clearance checked" | "final approved" | "posted" = m.status;
+    let reviewer = m.reviewedBy;
+    let approver = m.approvedBy;
+    let poster = m.postedBy;
+    let postedTime = m.postedAt;
+
+    if (action === "review") {
+      nextStatus = "for review";
+    } else if (action === "approve") {
+      nextStatus = "approved";
+      reviewer = currentSession?.name || "Senior Assessor Reviewer";
+    } else if (action === "clearance") {
+      nextStatus = "clearance checked";
+    } else if (action === "final_approve") {
+      nextStatus = "final approved";
+      approver = currentSession?.name || "Municipal Assessor";
+    } else if (action === "post") {
+      
+      const parsedMetadata = m.metadata ? JSON.parse(m.metadata) : {};
+
+      // A. LAND TRANSFER / OWNERSHIP TRANSFER Check outstanding bills
+      if (m.mutationType === "land_transfer" || m.mutationType === "ownership_transfer") {
+        if (!m.sourcePropertyId) {
+          return res.status(400).json({ message: "Missing reference property ID for transfer." });
+        }
+        // Verify no unpaid tax statements on this property
+        const unpaidSoas = db.soaRecords.filter(s => s.propertyId === m.sourcePropertyId && (s.status === "issued" || s.status === "partially paid" || s.balance > 0));
+        if (unpaidSoas.length > 0) {
+          return res.status(400).json({ 
+            message: `Cannot post ownership transfer. Property possesses outstanding real property tax liability of ₱${unpaidSoas.reduce((sum, s) => sum + s.balance, 0).toLocaleString()} across ${unpaidSoas.length} SOAs. Clearing this clearance gate requires complete settlement of all municipal tax dues.` 
+          });
+        }
+
+        // Apply owner change
+        const sourcePropIdx = db.properties.findIndex(p => p.id === m.sourcePropertyId);
+        if (sourcePropIdx === -1) {
+          return res.status(400).json({ message: "Reference property not found on record." });
+        }
+
+        const sourceProp = db.properties[sourcePropIdx];
+        const prevOwnerSnap = sourceProp.ownerName;
+
+        // Obtain new owner taxpayer details
+        const newOwnerTaxpayer = db.taxpayers.find(t => t.id === m.newTaxpayerId);
+        if (!newOwnerTaxpayer) {
+          return res.status(400).json({ message: "New owner taxpayer entity not found." });
+        }
+        const newOwnerName = `${newOwnerTaxpayer.firstName} ${newOwnerTaxpayer.lastName} ${newOwnerTaxpayer.companyName}`.trim();
+
+        // 1. Log in property_ownership_history
+        const startOfOwnership = sourceProp.createdAt || new Date().toISOString();
+        const historyId = db.propertyOwnershipHistory.length > 0 ? Math.max(...db.propertyOwnershipHistory.map(h => h.id)) + 1 : 1;
+        db.propertyOwnershipHistory.push({
+          id: historyId,
+          propertyId: sourceProp.id,
+          taxpayerId: sourceProp.ownerId,
+          ownerNameSnapshot: prevOwnerSnap,
+          tdnSnapshot: sourceProp.tdn,
+          pinSnapshot: sourceProp.pin,
+          ownershipStartDate: startOfOwnership,
+          ownershipEndDate: new Date().toISOString(),
+          acquisitionType: parsedMetadata.transferType || "sale",
+          documentReference: parsedMetadata.deedReference || "Transfer Contract",
+          mutationId: m.id,
+          remarks: transRemarks || m.remarks,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        // 2. Mark previous status as "transferred"
+        const oldStatus = sourceProp.status;
+        db.properties[sourcePropIdx].status = "transferred";
+        db.properties[sourcePropIdx].remarks = `Transferred ownership under transaction ${m.mutationNumber} to ${newOwnerName}`;
+
+        const statusHistId = db.propertyStatusHistory.length > 0 ? Math.max(...db.propertyStatusHistory.map(s => s.id)) + 1 : 1;
+        db.propertyStatusHistory.push({
+          id: statusHistId,
+          propertyId: sourceProp.id,
+          previousStatus: oldStatus,
+          newStatus: "transferred",
+          reason: "Ownership Transfer Mutation Posted",
+          mutationId: m.id,
+          changedBy: currentSession?.name || "Assessor Registrar",
+          changedAt: new Date().toISOString(),
+          remarks: transRemarks || ""
+        });
+
+        // 3. Create the New Property with the new owner and new TDN
+        const newPropId = db.properties.length > 0 ? Math.max(...db.properties.map(p => p.id)) + 1 : 1;
+        const newTdnVal = m.newTdn || `TD-${new Date().getFullYear()}-${String(newPropId).padStart(6, "0")}`;
+        const newPinVal = m.newPin || sourceProp.pin;
+
+        const transferredProp: Property = {
+          ...sourceProp,
+          id: newPropId,
+          ownerId: newOwnerTaxpayer.id,
+          ownerName: newOwnerName,
+          tdn: newTdnVal,
+          previousTdn: sourceProp.tdn,
+          status: "active",
+          remarks: `Acquired via ownership transfer from ${prevOwnerSnap} under ${m.mutationNumber}`,
+          createdAt: new Date().toISOString()
+        };
+
+        db.properties.push(transferredProp);
+
+        m.targetPropertyId = newPropId;
+        m.newTdn = newTdnVal;
+        m.newPin = newPinVal;
+
+        // Auto-generate Tax Declaration for the new property
+        const maxTdId = db.taxDeclarations.length > 0 ? Math.max(...db.taxDeclarations.map(t => t.id)) + 1 : 1;
+        db.taxDeclarations.push({
+          id: maxTdId,
+          tdn: newTdnVal,
+          propertyId: newPropId,
+          faasId: 1, 
+          ownerId: newOwnerTaxpayer.id,
+          ownerName: newOwnerName,
+          effectivityYear: m.effectivityYear,
+          classification: sourceProp.classification,
+          assessedValue: sourceProp.area * 500, 
+          previousTdn: sourceProp.tdn,
+          status: "active",
+          dateIssued: new Date().toISOString().split('T')[0],
+          issuedBy: currentSession?.name || "Renato Valdecantos",
+          remarks: `Auto-generated from transaction ${m.mutationNumber}`
+        });
+
+      } else if (m.mutationType === "subdivision") {
+        if (!m.sourcePropertyId) {
+          return res.status(400).json({ message: "Missing mother reference property ID for subdivision." });
+        }
+        const motherPropIdx = db.properties.findIndex(p => p.id === m.sourcePropertyId);
+        if (motherPropIdx === -1) {
+          return res.status(400).json({ message: "Mother property not found." });
+        }
+        const motherProp = db.properties[motherPropIdx];
+        if (motherProp.status !== "active") {
+          return res.status(400).json({ message: "Mother property must be active in order to execute a subdivision." });
+        }
+
+        const childLots = parsedMetadata.childLots || [];
+        if (childLots.length === 0) {
+          return res.status(400).json({ message: "Subdivision requires at least one child lot mapped." });
+        }
+
+        const totalChildArea = childLots.reduce((sum: number, c: any) => sum + (parseFloat(c.area) || 0), 0);
+        if (totalChildArea > motherProp.area && !parsedMetadata.overrideAreaCheck) {
+          return res.status(400).json({ 
+            message: `Total child area (${totalChildArea} sqm) exceeds mother property total area (${motherProp.area} sqm). Subdivision blocked unless area override permission is enabled in metadata.` 
+          });
+        }
+
+        // Cancel mother property
+        const oldMotherStatus = motherProp.status;
+        db.properties[motherPropIdx].status = "subdivided";
+        db.properties[motherPropIdx].remarks = `Subdivided into ${childLots.length} lots under transaction ${m.mutationNumber}`;
+
+        const statusHistId = db.propertyStatusHistory.length > 0 ? Math.max(...db.propertyStatusHistory.map(s => s.id)) + 1 : 1;
+        db.propertyStatusHistory.push({
+          id: statusHistId,
+          propertyId: motherProp.id,
+          previousStatus: oldMotherStatus,
+          newStatus: "subdivided",
+          reason: "Property Subdivided Mutation",
+          mutationId: m.id,
+          changedBy: currentSession?.name || "Renato Valdecantos",
+          changedAt: new Date().toISOString(),
+          remarks: `Mother lot split into ${childLots.length} separate sub-titles.`
+        });
+
+        // Insert each child lot as property
+        childLots.forEach((lot: any, lotIdx: number) => {
+          const childPropId = db.properties.length > 0 ? Math.max(...db.properties.map(p => p.id)) + 1 : 1;
+          const childTdn = lot.tdn || `TD-${new Date().getFullYear()}-${String(childPropId).padStart(6, "0")}`;
+          const childPin = lot.pin || `${motherProp.pin}-S${lotIdx + 1}`;
+          
+          let childOwnerId = motherProp.ownerId;
+          let childOwnerName = motherProp.ownerName;
+
+          if (lot.ownerId) {
+            const foundChildOwner = db.taxpayers.find(tx => tx.id === parseInt(lot.ownerId));
+            if (foundChildOwner) {
+              childOwnerId = foundChildOwner.id;
+              childOwnerName = `${foundChildOwner.firstName} ${foundChildOwner.lastName} ${foundChildOwner.companyName}`.trim();
+            }
+          }
+
+          const newChildProp: Property = {
+            id: childPropId,
+            pin: childPin,
+            tdn: childTdn,
+            previousTdn: motherProp.tdn,
+            ownerId: childOwnerId,
+            ownerName: childOwnerName,
+            administrator: lot.administrator || "Self",
+            kind: "land",
+            classification: lot.classification || motherProp.classification,
+            barangayId: motherProp.barangayId,
+            barangayName: motherProp.barangayName,
+            street: motherProp.street,
+            lotNo: lot.lotNo || `Lot ${lotIdx + 1}`,
+            blockNo: motherProp.blockNo,
+            surveyNo: lot.surveyNo || motherProp.surveyNo,
+            titleNo: lot.titleNo || "",
+            area: parseFloat(lot.area) || 100,
+            unit: motherProp.unit,
+            boundaries: lot.boundaries || "",
+            latitude: motherProp.latitude,
+            longitude: motherProp.longitude,
+            parcelReference: `PAR-SUB-${childPropId}`,
+            status: "active",
+            remarks: `Created via subdivision of mother property ${motherProp.tdn} under ${m.mutationNumber}`,
+            createdAt: new Date().toISOString()
+          };
+
+          db.properties.push(newChildProp);
+
+          // Add item entry
+          const itemNextId = db.propertyMutationItems.length > 0 ? Math.max(...db.propertyMutationItems.map(i => i.id)) + 1 : 1;
+          db.propertyMutationItems.push({
+            id: itemNextId,
+            mutationId: m.id,
+            sourcePropertyId: motherProp.id,
+            targetPropertyId: childPropId,
+            itemType: "subdivision_lot",
+            area: newChildProp.area,
+            fairMarketValue: parseFloat(lot.fairMarketValue) || 100000,
+            assessmentLevel: parseFloat(lot.assessmentLevel) || 20,
+            assessedValue: parseFloat(lot.assessedValue) || 20000,
+            oldValue: JSON.stringify({ motherTdn: motherProp.tdn, motherArea: motherProp.area }),
+            newValue: JSON.stringify({ childTdn, childArea: newChildProp.area, childPin }),
+            remarks: `Subdivided Child Lot ${lotIdx + 1}`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+
+          // Generate FAAS reference
+          const maxF = db.faasRecords.length > 0 ? Math.max(...db.faasRecords.map(f => f.id)) + 1 : 1;
+          db.faasRecords.push({
+            id: maxF,
+            faasNumber: `FAAS-SUB-${String(maxF).padStart(6, "0")}`,
+            propertyId: childPropId,
+            taxpayerId: newChildProp.ownerId,
+            effectivityYear: m.effectivityYear,
+            revisionYear: new Date().getFullYear(),
+            fairMarketValue: parseFloat(lot.fairMarketValue) || 100000,
+            assessmentLevel: parseFloat(lot.assessmentLevel) || 20,
+            assessedValue: parseFloat(lot.assessedValue) || 20000,
+            appraisedBy: currentSession?.name || "Assessor Appraiser",
+            dateAppraised: new Date().toISOString().split('T')[0],
+            recommendedBy: "Staff Reviewer",
+            approvedBy: currentSession?.name || "Assessor chief",
+            dateApproved: new Date().toISOString().split('T')[0],
+            status: "approved",
+            createdAt: new Date().toISOString()
+          });
+
+          // Custom Tax Dec for subdivided lot
+          const maxTdId = db.taxDeclarations.length > 0 ? Math.max(...db.taxDeclarations.map(t => t.id)) + 1 : 1;
+          db.taxDeclarations.push({
+            id: maxTdId,
+            tdn: childTdn,
+            propertyId: childPropId,
+            faasId: maxF,
+            ownerId: newChildProp.ownerId,
+            ownerName: newChildProp.ownerName,
+            effectivityYear: m.effectivityYear,
+            classification: newChildProp.classification,
+            assessedValue: parseFloat(lot.assessedValue) || 20000,
+            previousTdn: motherProp.tdn,
+            status: "active",
+            dateIssued: new Date().toISOString().split('T')[0],
+            issuedBy: currentSession?.name || "Renato Valdecantos",
+            remarks: `Subdivision offspring from ${motherProp.tdn}`
+          });
+        });
+
+      } else if (m.mutationType === "consolidation") {
+        const sourceIds: number[] = parsedMetadata.sourcePropertyIds || [];
+        if (sourceIds.length < 2) {
+          return res.status(400).json({ message: "Consolidation requires at least 2 source properties." });
+        }
+
+        const sources = db.properties.filter(p => sourceIds.includes(p.id));
+        const inactiveSources = sources.filter(s => s.status !== "active");
+        if (inactiveSources.length > 0) {
+          return res.status(400).json({ message: "All source properties for consolidation must be active." });
+        }
+
+        const totalCombinedArea = sources.reduce((sum, s) => sum + s.area, 0);
+        const firstProp = sources[0];
+
+        const consTdId = db.properties.length > 0 ? Math.max(...db.properties.map(p => p.id)) + 1 : 1;
+        const consTdn = m.newTdn || `TD-CON-${consTdId}`;
+        const consPin = m.newPin || `CON-${firstProp.pin}`;
+
+        const consolidatedProperty: Property = {
+          id: consTdId,
+          pin: consPin,
+          tdn: consTdn,
+          previousTdn: sources.map(s => s.tdn).join(", "),
+          ownerId: m.newTaxpayerId || firstProp.ownerId,
+          ownerName: firstProp.ownerName,
+          administrator: firstProp.administrator,
+          kind: firstProp.kind,
+          classification: firstProp.classification,
+          barangayId: firstProp.barangayId,
+          barangayName: firstProp.barangayName,
+          street: firstProp.street,
+          lotNo: "Consolidated Lot",
+          blockNo: firstProp.blockNo,
+          surveyNo: "Consolidated Survey No.",
+          titleNo: "",
+          area: totalCombinedArea,
+          unit: firstProp.unit,
+          boundaries: "Bordered by combined consolidated borders",
+          latitude: firstProp.latitude,
+          longitude: firstProp.longitude,
+          parcelReference: `PAR-CON-${consTdId}`,
+          status: "active",
+          remarks: `Merged from source parts: ${sources.map(s => s.tdn).join(", ")}`,
+          createdAt: new Date().toISOString()
+        };
+
+        db.properties.push(consolidatedProperty);
+
+        // Cancel sources
+        sources.forEach(src => {
+          const srcIdx = db.properties.findIndex(p => p.id === src.id);
+          db.properties[srcIdx].status = "consolidated";
+          db.properties[srcIdx].remarks = `Merged into consolidated TDN ${consTdn} under transaction ${m.mutationNumber}`;
+
+          const statusHistId = db.propertyStatusHistory.length > 0 ? Math.max(...db.propertyStatusHistory.map(s => s.id)) + 1 : 1;
+          db.propertyStatusHistory.push({
+            id: statusHistId,
+            propertyId: src.id,
+            previousStatus: "active",
+            newStatus: "consolidated",
+            reason: "Property Consolidated Mutation",
+            mutationId: m.id,
+            changedBy: currentSession?.name || "Assessor Registrar",
+            changedAt: new Date().toISOString(),
+            remarks: `Merged with adjacent properties into Consolidated Title.`
+          });
+        });
+
+        m.targetPropertyId = consTdId;
+
+      } else if (m.mutationType === "reclassification") {
+        if (!m.sourcePropertyId) return res.status(400).json({ message: "No target property selected." });
+        const pIdx = db.properties.findIndex(p => p.id === m.sourcePropertyId);
+        if (pIdx === -1) return res.status(400).json({ message: "Target property not found." });
+
+        const prevClass = db.properties[pIdx].classification;
+        const targetClass = parsedMetadata.newClassification || "commercial";
+        db.properties[pIdx].classification = targetClass;
+        db.properties[pIdx].remarks += ` (Reclassified from ${prevClass} to ${targetClass} on ${m.effectivityYear})`;
+
+        const statusHistId = db.propertyStatusHistory.length > 0 ? Math.max(...db.propertyStatusHistory.map(s => s.id)) + 1 : 1;
+        db.propertyStatusHistory.push({
+          id: statusHistId,
+          propertyId: m.sourcePropertyId,
+          previousStatus: "active",
+          newStatus: "active",
+          reason: `Reclassified classification metadata from ${prevClass} to ${targetClass}`,
+          mutationId: m.id,
+          changedBy: currentSession?.name || "Municipal Assessor",
+          changedAt: new Date().toISOString(),
+          remarks: m.remarks
+        });
+
+      } else if (m.mutationType === "assessment_revision") {
+        if (!m.sourcePropertyId) return res.status(400).json({ message: "No source property selected." });
+        const pIdx = db.properties.findIndex(p => p.id === m.sourcePropertyId);
+        if (pIdx === -1) return res.status(400).json({ message: "Property not found." });
+
+        const newFmv = parseFloat(parsedMetadata.fairMarketValue) || 500000;
+        const newAsLvl = parseFloat(parsedMetadata.assessmentLevel) || 20;
+        const newAssessed = (newFmv * newAsLvl) / 100;
+
+        const maxF = db.faasRecords.length > 0 ? Math.max(...db.faasRecords.map(f => f.id)) + 1 : 1;
+        db.faasRecords.push({
+          id: maxF,
+          faasNumber: `REV-FAAS-${maxF}`,
+          propertyId: m.sourcePropertyId,
+          taxpayerId: db.properties[pIdx].ownerId,
+          effectivityYear: m.effectivityYear,
+          revisionYear: new Date().getFullYear(),
+          fairMarketValue: newFmv,
+          assessmentLevel: newAsLvl,
+          assessedValue: newAssessed,
+          appraisedBy: currentSession?.name || "Assessor Staff Appraisal Team",
+          dateAppraised: new Date().toISOString().split('T')[0],
+          recommendedBy: "Senior Assessor Advisor",
+          approvedBy: currentSession?.name || "Renato Valdecantos",
+          dateApproved: new Date().toISOString().split('T')[0],
+          status: "approved",
+          createdAt: new Date().toISOString()
+        });
+
+      } else if (m.mutationType === "cancellation") {
+        if (!m.sourcePropertyId) return res.status(400).json({ message: "Property id required for cancellation." });
+        const pIdx = db.properties.findIndex(p => p.id === m.sourcePropertyId);
+        if (pIdx === -1) return res.status(400).json({ message: "Property not found." });
+
+        const oldStatus = db.properties[pIdx].status;
+        db.properties[pIdx].status = "cancelled";
+        db.properties[pIdx].remarks = `Cancelled! Reason: ${parsedMetadata.cancelReason || "Erroneous assessment"}. Reference ${m.mutationNumber}`;
+
+        const statusHistId = db.propertyStatusHistory.length > 0 ? Math.max(...db.propertyStatusHistory.map(s => s.id)) + 1 : 1;
+        db.propertyStatusHistory.push({
+          id: statusHistId,
+          propertyId: m.sourcePropertyId,
+          previousStatus: oldStatus,
+          newStatus: "cancelled",
+          reason: `Declaration Cancelled: ${parsedMetadata.cancelReason || "Request of taxpayer"}`,
+          mutationId: m.id,
+          changedBy: currentSession?.name || "Renato Valdecantos",
+          changedAt: new Date().toISOString(),
+          remarks: m.remarks
+        });
+      }
+
+      nextStatus = "posted";
+      poster = currentSession?.name || "Municipal Assessor";
+      postedTime = new Date().toISOString();
+    }
+
+    m.status = nextStatus;
+    m.reviewedBy = reviewer;
+    m.approvedBy = approver;
+    m.postedBy = poster;
+    m.postedAt = postedTime;
+    m.updatedAt = new Date().toISOString();
+
+    db.propertyMutations[idx] = m;
+    writeDatabase(db);
+
+    logAction(
+      currentSession?.id || 1,
+      currentSession?.username || "admin",
+      `TRANSITION_MUTATION_${action.toUpperCase()}`,
+      "Assessor Mutation Portal",
+      "property_mutations",
+      m.id,
+      null,
+      m
+    );
+
+    res.json(m);
+  });
+
   // Hot-reloads & serves SPA
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

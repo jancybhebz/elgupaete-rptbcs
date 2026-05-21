@@ -18,7 +18,8 @@ import {
   ShieldAlert,
   UserCheck,
   Power,
-  ScanLine
+  ScanLine,
+  GitFork
 } from "lucide-react";
 import { User } from "../types";
 
@@ -45,6 +46,7 @@ export default function Sidebar({
     { id: "dashboard", label: "Dashboard", icon: Home, roles: ["all"] },
     { id: "taxpayers", label: "Taxpayers Records", icon: Users, roles: ["System Administrator", "Municipal Assessor", "Assessor Staff", "Municipal Treasurer", "Treasury Cashier", "Treasury Supervisor", "Report Viewer", "Auditor / Read-only User"] },
     { id: "properties", label: "Real Properties", icon: Building2, roles: ["System Administrator", "Municipal Assessor", "Assessor Staff", "Municipal Treasurer", "Treasury Supervisor", "Auditor / Read-only User"] },
+    { id: "mutations", label: "Property Mutations", icon: GitFork, roles: ["System Administrator", "Municipal Assessor", "Assessor Staff", "Municipal Treasurer", "Treasury Supervisor", "Auditor / Read-only User"] },
     { id: "faas", label: "FAAS Appraisal", icon: FileSpreadsheet, roles: ["System Administrator", "Municipal Assessor", "Assessor Staff", "Auditor / Read-only User"] },
     { id: "declarations", label: "Tax Declarations", icon: FileCheck, roles: ["System Administrator", "Municipal Assessor", "Assessor Staff", "Municipal Treasurer", "Treasury Supervisor", "Auditor / Read-only User"] },
     { id: "billing", label: "Billing / SOA", icon: Receipt, roles: ["System Administrator", "Municipal Treasurer", "Treasury Cashier", "Treasury Supervisor", "Auditor / Read-only User"] },

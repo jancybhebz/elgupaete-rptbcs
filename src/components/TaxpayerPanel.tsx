@@ -411,27 +411,31 @@ export default function TaxpayerPanel({ taxpayers, properties, soa, currentUser,
               </h5>
               <div className="border border-slate-150 rounded-lg overflow-hidden max-h-40 overflow-y-auto">
                 <table className="w-full text-left text-[11px] font-sans">
-                  <tr className="bg-slate-50 font-bold text-slate-500">
-                    <th className="p-2.5">PIN</th>
-                    <th className="p-2.5">TDN Reference</th>
-                    <th className="p-2.5">Classification</th>
-                    <th className="p-2.5">Barangay</th>
-                    <th className="p-2.5">Area</th>
-                  </tr>
-                  {getOwnedProperties(selectedTaxpayer.id).map(p => (
-                    <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="p-2.5 font-mono">{p.pin}</td>
-                      <td className="p-2.5 font-mono font-semibold text-indigo-600">{p.tdn}</td>
-                      <td className="p-2.5 uppercase text-slate-500">{p.classification}</td>
-                      <td className="p-2.5">{p.barangayName}</td>
-                      <td className="p-2.5 font-mono">{p.area} {p.unit}</td>
+                  <thead>
+                    <tr className="bg-slate-50 font-bold text-slate-500">
+                      <th className="p-2.5">PIN</th>
+                      <th className="p-2.5">TDN Reference</th>
+                      <th className="p-2.5">Classification</th>
+                      <th className="p-2.5">Barangay</th>
+                      <th className="p-2.5">Area</th>
                     </tr>
-                  ))}
-                  {getOwnedProperties(selectedTaxpayer.id).length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="p-3 text-center text-slate-400 italic">No real tax entities mapped on record.</td>
-                    </tr>
-                  )}
+                  </thead>
+                  <tbody>
+                    {getOwnedProperties(selectedTaxpayer.id).map(p => (
+                      <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="p-2.5 font-mono">{p.pin}</td>
+                        <td className="p-2.5 font-mono font-semibold text-indigo-600">{p.tdn}</td>
+                        <td className="p-2.5 uppercase text-slate-500">{p.classification}</td>
+                        <td className="p-2.5">{p.barangayName}</td>
+                        <td className="p-2.5 font-mono">{p.area} {p.unit}</td>
+                      </tr>
+                    ))}
+                    {getOwnedProperties(selectedTaxpayer.id).length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="p-3 text-center text-slate-400 italic">No real tax entities mapped on record.</td>
+                      </tr>
+                    )}
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -444,37 +448,41 @@ export default function TaxpayerPanel({ taxpayers, properties, soa, currentUser,
               </h5>
               <div className="border border-slate-150 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
                 <table className="w-full text-left text-[11px] font-mono">
-                  <tr className="bg-slate-50 font-sans font-bold text-slate-500">
-                    <th className="p-2.5">SOA Ref</th>
-                    <th className="p-2.5">Billing Year</th>
-                    <th className="p-2.5">Basic + SEF</th>
-                    <th className="p-2.5">Penalties</th>
-                    <th className="p-2.5">Total Amount</th>
-                    <th className="p-2.5">Settled/Bal</th>
-                    <th className="p-2.5">Status</th>
-                  </tr>
-                  {getTaxpayerSoas(selectedTaxpayer.id).map(s => (
-                    <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="p-2.5 font-bold font-mono text-slate-800">{s.soaNumber}</td>
-                      <td className="p-2.5">{s.billingYear} ({s.billingPeriod})</td>
-                      <td className="p-2.5">₱{(s.basicRptAmount + s.sefAmount).toLocaleString()}</td>
-                      <td className="p-2.5 text-red-500">₱{(s.penaltyAmount).toLocaleString()}</td>
-                      <td className="p-2.5 font-semibold">₱{(s.totalDue).toLocaleString()}</td>
-                      <td className="p-2.5 text-emerald-600 font-bold">₱{s.amountPaid.toLocaleString()} / ₱{s.balance.toLocaleString()}</td>
-                      <td className="p-2.5">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                          s.status === "fully paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                        }`}>
-                          {s.status.toUpperCase()}
-                        </span>
-                      </td>
+                  <thead>
+                    <tr className="bg-slate-50 font-sans font-bold text-slate-500">
+                      <th className="p-2.5">SOA Ref</th>
+                      <th className="p-2.5">Billing Year</th>
+                      <th className="p-2.5">Basic + SEF</th>
+                      <th className="p-2.5">Penalties</th>
+                      <th className="p-2.5">Total Amount</th>
+                      <th className="p-2.5">Settled/Bal</th>
+                      <th className="p-2.5">Status</th>
                     </tr>
-                  ))}
-                  {getTaxpayerSoas(selectedTaxpayer.id).length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="p-3 text-center text-slate-400 font-sans italic">No Statements of Account recorded.</td>
-                    </tr>
-                  )}
+                  </thead>
+                  <tbody>
+                    {getTaxpayerSoas(selectedTaxpayer.id).map(s => (
+                      <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="p-2.5 font-bold font-mono text-slate-800">{s.soaNumber}</td>
+                        <td className="p-2.5">{s.billingYear} ({s.billingPeriod})</td>
+                        <td className="p-2.5">₱{(s.basicRptAmount + s.sefAmount).toLocaleString()}</td>
+                        <td className="p-2.5 text-red-500">₱{(s.penaltyAmount).toLocaleString()}</td>
+                        <td className="p-2.5 font-semibold">₱{(s.totalDue).toLocaleString()}</td>
+                        <td className="p-2.5 text-emerald-600 font-bold">₱{s.amountPaid.toLocaleString()} / ₱{s.balance.toLocaleString()}</td>
+                        <td className="p-2.5">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                            s.status === "fully paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {s.status.toUpperCase()}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {getTaxpayerSoas(selectedTaxpayer.id).length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="p-3 text-center text-slate-400 font-sans italic">No Statements of Account recorded.</td>
+                      </tr>
+                    )}
+                  </tbody>
                 </table>
               </div>
             </div>

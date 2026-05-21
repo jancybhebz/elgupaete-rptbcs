@@ -190,6 +190,79 @@ export interface AuditLog {
   createdAt: string;
 }
 
+export interface PropertyMutation {
+  id: number;
+  mutationNumber: string;
+  mutationType: string;
+  sourcePropertyId: number | null;
+  targetPropertyId: number | null;
+  taxpayerId: number | null;
+  previousTaxpayerId: number | null;
+  newTaxpayerId: number | null;
+  previousTdn: string;
+  newTdn: string;
+  previousPin: string;
+  newPin: string;
+  effectivityDate: string;
+  effectivityYear: number;
+  status: "draft" | "for review" | "approved" | "clearance checked" | "final approved" | "posted";
+  requestedBy: string;
+  reviewedBy: string;
+  approvedBy: string;
+  postedBy: string;
+  postedAt: string | null;
+  remarks: string;
+  metadata: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyMutationItem {
+  id: number;
+  mutationId: number;
+  sourcePropertyId: number | null;
+  targetPropertyId: number | null;
+  itemType: string;
+  area: number;
+  fairMarketValue: number;
+  assessmentLevel: number;
+  assessedValue: number;
+  oldValue: string;
+  newValue: string;
+  remarks: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyOwnershipHistory {
+  id: number;
+  propertyId: number;
+  taxpayerId: number;
+  ownerNameSnapshot: string;
+  tdnSnapshot: string;
+  pinSnapshot: string;
+  ownershipStartDate: string;
+  ownershipEndDate: string | null;
+  acquisitionType: string;
+  documentReference: string;
+  mutationId: number | null;
+  remarks: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyStatusHistory {
+  id: number;
+  propertyId: number;
+  previousStatus: string;
+  newStatus: string;
+  reason: string;
+  mutationId: number | null;
+  changedBy: string;
+  changedAt: string;
+  remarks: string;
+}
+
 export interface SystemSettings {
   lguName: string;
   province: string;
@@ -224,6 +297,10 @@ interface DatabaseSchema {
   attachments: Attachment[];
   auditLogs: AuditLog[];
   settings: SystemSettings;
+  propertyMutations: PropertyMutation[];
+  propertyMutationItems: PropertyMutationItem[];
+  propertyOwnershipHistory: PropertyOwnershipHistory[];
+  propertyStatusHistory: PropertyStatusHistory[];
 }
 
 const DB_FILE_PATH = path.join(process.cwd(), "db_store.json");
@@ -237,7 +314,15 @@ export function loadDatabase(): DatabaseSchema {
   }
   try {
     const raw = fs.readFileSync(DB_FILE_PATH, "utf-8");
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    
+    // Defensive check to ensure old db_store loaded does not miss property list fields
+    if (!parsed.propertyMutations) parsed.propertyMutations = [];
+    if (!parsed.propertyMutationItems) parsed.propertyMutationItems = [];
+    if (!parsed.propertyOwnershipHistory) parsed.propertyOwnershipHistory = [];
+    if (!parsed.propertyStatusHistory) parsed.propertyStatusHistory = [];
+    
+    return parsed;
   } catch (err) {
     console.error("Failed to read JSON DB. Returning default seed.", err);
     return getSeedData();
@@ -799,6 +884,10 @@ function getSeedData(): DatabaseSchema {
       paymentApiKeyEncrypted: "U09BLUxFVkVMLVBBRVRFLTIwMjYK", // Base64 representation for mockup
       paymentEnvironment: "sandbox",
       paymentEnabled: true
-    }
+    },
+    propertyMutations: [],
+    propertyMutationItems: [],
+    propertyOwnershipHistory: [],
+    propertyStatusHistory: []
   };
 }

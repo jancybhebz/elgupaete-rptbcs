@@ -3,6 +3,7 @@ import Sidebar from "./components/Sidebar.tsx";
 import PublicVerify from "./components/PublicVerify.tsx";
 import TaxpayerPanel from "./components/TaxpayerPanel.tsx";
 import PropertyPanel from "./components/PropertyPanel.tsx";
+import MutationPanel from "./components/MutationPanel.tsx";
 import FaasPanel from "./components/FaasPanel.tsx";
 import BillingPanel from "./components/BillingPanel.tsx";
 import TreasuryPanel from "./components/TreasuryPanel.tsx";
@@ -230,6 +231,18 @@ export default function App() {
               taxpayers={taxpayers}
               attachments={attachments}
               currentUser={currentUser}
+              onRefresh={loadAppState}
+            />
+          )}
+
+          {currentTab === "mutations" && (
+            <MutationPanel
+              currentUser={currentUser}
+              taxpayers={taxpayers}
+              properties={properties}
+              faas={faas}
+              declarations={declarations}
+              soa={soa}
               onRefresh={loadAppState}
             />
           )}

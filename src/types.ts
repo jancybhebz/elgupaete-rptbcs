@@ -197,3 +197,77 @@ export interface SystemSettings {
   paymentEnvironment: "sandbox" | "production";
   paymentEnabled: boolean;
 }
+
+export interface PropertyMutation {
+  id: number;
+  mutationNumber: string;
+  mutationType: string; // 'land_transfer' | 'ownership_transfer' | 'subdivision' | 'consolidation' | 'reclassification' | 'assessment_revision' | 'cancellation' | 'new_discovery' | 'annotation' | 'correction' | 'taxpayer_info_change' | 'admin_change' | 'building_improvement' | 'machinery_update' | 'retirement'
+  sourcePropertyId: number | null;
+  targetPropertyId: number | null;
+  taxpayerId: number | null;
+  previousTaxpayerId: number | null;
+  newTaxpayerId: number | null;
+  previousTdn: string;
+  newTdn: string;
+  previousPin: string;
+  newPin: string;
+  effectivityDate: string;
+  effectivityYear: number;
+  status: "draft" | "for review" | "approved" | "clearance checked" | "final approved" | "posted";
+  requestedBy: string;
+  reviewedBy: string;
+  approvedBy: string;
+  postedBy: string;
+  postedAt: string | null;
+  remarks: string;
+  metadata: string; // JSON string containing mutation extra spec fields
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyMutationItem {
+  id: number;
+  mutationId: number;
+  sourcePropertyId: number | null;
+  targetPropertyId: number | null;
+  itemType: string;
+  area: number;
+  fairMarketValue: number;
+  assessmentLevel: number;
+  assessedValue: number;
+  oldValue: string; // JSON snapshot
+  newValue: string; // JSON snapshot
+  remarks: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyOwnershipHistory {
+  id: number;
+  propertyId: number;
+  taxpayerId: number;
+  ownerNameSnapshot: string;
+  tdnSnapshot: string;
+  pinSnapshot: string;
+  ownershipStartDate: string;
+  ownershipEndDate: string | null;
+  acquisitionType: string;
+  documentReference: string;
+  mutationId: number | null;
+  remarks: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyStatusHistory {
+  id: number;
+  propertyId: number;
+  previousStatus: string;
+  newStatus: string;
+  reason: string;
+  mutationId: number | null;
+  changedBy: string;
+  changedAt: string;
+  remarks: string;
+}
+
