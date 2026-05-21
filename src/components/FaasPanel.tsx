@@ -1,6 +1,25 @@
 import React, { useState } from "react";
 import { User, FaaSRecord, Property, Taxpayer, TaxDeclaration } from "../types";
-import { Plus, Check, FileCheck, Landmark, Coins, AlertCircle, FileSpreadsheet, ListCheck, BadgeCheck } from "lucide-react";
+import { 
+  Plus, 
+  Check, 
+  FileCheck, 
+  Landmark, 
+  Coins, 
+  AlertCircle, 
+  FileSpreadsheet, 
+  ListCheck, 
+  BadgeCheck, 
+  X, 
+  MapPin, 
+  Calendar, 
+  FileText, 
+  UserCheck, 
+  Layers, 
+  Hash,
+  Shield,
+  Activity
+} from "lucide-react";
 
 interface FaasPanelProps {
   faas: FaaSRecord[];
@@ -22,6 +41,7 @@ export default function FaasPanel({
   const [activeSubTab, setActiveSubTab] = useState<"faas" | "tds">("faas");
   const [isCreatingFaas, setIsCreatingFaas] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTdn, setSelectedTdn] = useState<TaxDeclaration | null>(null);
 
   // Form states 
   const [formData, setFormData] = useState({
@@ -378,7 +398,14 @@ export default function FaasPanel({
               <tbody className="divide-y divide-slate-100 text-xs">
                 {filteredTd.map(t => (
                   <tr key={t.id} className="hover:bg-slate-50/70 transition">
-                    <td className="py-3 px-4 font-mono font-bold text-indigo-600">{t.tdn}</td>
+                    <td className="py-3 px-4">
+                      <button
+                        onClick={() => setSelectedTdn(t)}
+                        className="font-mono font-bold text-indigo-600 hover:text-indigo-800 hover:underline text-left cursor-pointer transition focus:outline-none"
+                      >
+                        {t.tdn}
+                      </button>
+                    </td>
                     <td className="py-3 px-4 font-mono text-slate-500">{t.previousTdn || "ORIGINAL"}</td>
                     <td className="py-3 px-4 font-semibold text-slate-800">{t.ownerName}</td>
                     <td className="py-3 px-4 font-mono font-semibold">{t.effectivityYear}</td>
@@ -409,6 +436,195 @@ export default function FaasPanel({
           </div>
         </>
       )}
+
+      {/* Tax Declaration Details Modal */}
+      {selectedTdn && (() => {
+        const linkedProperty = properties.find(p => p.id === selectedTdn.propertyId);
+        const linkedTaxpayer = taxpayers.find(tp => tp.id === selectedTdn.ownerId);
+        const linkedFaas = faas.find(f => f.id === selectedTdn.faasId);
+
+        return (
+          <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn shadow-2xl" id="tdn_details_modal">
+            <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-slate-200 shadow-2xl p-6 relative font-sans text-xs">
+              
+              {/* Header section with Seal & Title */}
+              <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-5">
+                <div className="flex gap-3">
+                  <div className="p-2.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl flex items-center justify-center shrink-0">
+                    <FileCheck className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-[9px] bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full font-mono">
+                      Municipal RPT Registry Document
+                    </span>
+                    <h4 className="font-extrabold text-slate-800 text-base mt-1">TDN: {selectedTdn.tdn}</h4>
+                    <p className="text-[11px] text-slate-400 font-medium">Approved and issued for real property assessment operations</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedTdn(null)}
+                  className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition cursor-pointer"
+                  id="close_td_modal"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Grid content */}
+              <div className="space-y-6">
+                {/* 1. Ownership & Authority Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
+                    <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <UserCheck className="h-4 w-4 text-indigo-600" />
+                      Estate Holder (Taxpayer)
+                    </h5>
+                    {linkedTaxpayer ? (() => {
+                      const tpName = linkedTaxpayer.type !== "individual" && linkedTaxpayer.companyName
+                        ? linkedTaxpayer.companyName
+                        : `${linkedTaxpayer.lastName}, ${linkedTaxpayer.firstName}${linkedTaxpayer.middleName ? " " + linkedTaxpayer.middleName.charAt(0) + "." : ""}${linkedTaxpayer.suffix ? " " + linkedTaxpayer.suffix : ""}`;
+                      return (
+                        <div className="space-y-1">
+                          <p className="font-extrabold text-slate-800 text-sm">{tpName}</p>
+                          <p className="text-[11px] text-slate-500 font-mono">Taxpayer No: {linkedTaxpayer.code || `TP-${linkedTaxpayer.id}`}</p>
+                          <p className="text-[11px] text-slate-500">Contact: {linkedTaxpayer.contactNumber || linkedTaxpayer.email || "No direct contact verified"}</p>
+                          <p className="text-[11px] text-slate-500 select-all underline font-serif">{linkedTaxpayer.address}</p>
+                        </div>
+                      );
+                    })() : (
+                      <div className="space-y-1">
+                        <p className="font-extrabold text-slate-850 text-slate-850 text-slate-800 text-sm">{selectedTdn.ownerName}</p>
+                        <p className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded italic">No matching profile found mapping to directories.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
+                    <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <Shield className="h-4 w-4 text-indigo-600" />
+                      Registry & Authority details
+                    </h5>
+                    <div className="space-y-1.5 text-xs text-slate-700 font-sans">
+                      <p className="flex justify-between items-center">
+                        <span className="text-slate-400">Previous TDN:</span>
+                        <strong className="font-mono text-slate-800">{selectedTdn.previousTdn || "ORIGINAL"}</strong>
+                      </p>
+                      <p className="flex justify-between items-center">
+                        <span className="text-slate-400">Authorized Official:</span>
+                        <strong className="text-slate-800 font-medium">{selectedTdn.issuedBy || "Municipal Assessor Office"}</strong>
+                      </p>
+                      <p className="flex justify-between items-center">
+                        <span className="text-slate-400">Date Issued:</span>
+                        <strong className="font-mono text-slate-550 text-slate-600">{selectedTdn.dateIssued}</strong>
+                      </p>
+                      <p className="flex justify-between items-center">
+                        <span className="text-slate-400">Status State:</span>
+                        <span className={`px-2 py-0.5 rounded-[4px] text-[8.5px] font-black uppercase tracking-widest ${
+                          selectedTdn.status === "active" ? "bg-emerald-50 text-emerald-600 border border-emerald-200/50" : "bg-red-50 text-red-650"
+                        }`}>
+                          {selectedTdn.status}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Linked Real Estate Property Information */}
+                <div className="border border-slate-205/60 border-slate-200 rounded-xl p-4 space-y-3 bg-white">
+                  <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <MapPin className="h-4 w-4 text-indigo-600" />
+                    Linked Real Estate Property Parcel details
+                  </h5>
+                  {linkedProperty ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans">
+                      <div className="space-y-0.5">
+                        <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider">Property PIN</span>
+                        <strong className="font-mono text-indigo-700 text-xs">{linkedProperty.pin}</strong>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider">Property Kind</span>
+                        <strong className="capitalize text-slate-850 text-slate-800 text-xs">{linkedProperty.kind}</strong>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider">Parcel Area</span>
+                        <strong className="font-mono text-slate-850 text-slate-800 text-xs">{linkedProperty.area} {linkedProperty.unit || "sqm"}</strong>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider">Survey Plot No.</span>
+                        <strong className="font-mono text-slate-850 text-slate-800 text-xs">{linkedProperty.surveyNo || "N/A"}</strong>
+                      </div>
+                      <div className="space-y-0.5 col-span-2">
+                        <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider">Location Street</span>
+                        <span className="text-slate-800 font-semibold">{linkedProperty.street || "Generic street address"}</span>
+                      </div>
+                      <div className="space-y-0.5 col-span-2">
+                        <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider">Barangay Zone</span>
+                        <strong className="text-slate-900">{linkedProperty.barangayName || "Paete Municipality"}</strong>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-600 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100 italic">
+                      Associated property parcel profile is currently linked to land assessment database but has not populated. Check if PIN details match.
+                    </p>
+                  )}
+                </div>
+
+                {/* 3. Valuation Formula & Maths */}
+                <div className="p-4 bg-slate-50/70 border border-slate-100 rounded-xl space-y-3">
+                  <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Coins className="h-4 w-4 text-indigo-600" />
+                    Valuation Formula & Tax Base limit math
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-3 bg-white border border-slate-100 rounded-xl space-y-1">
+                      <span className="block text-[10px] uppercase text-slate-400 font-bold">Fair Market Value</span>
+                      <strong className="font-mono text-slate-800 text-xs">
+                        ₱{linkedFaas ? linkedFaas.fairMarketValue.toLocaleString() : "N/A (See Appraisal)"}
+                      </strong>
+                    </div>
+                    <div className="p-3 bg-white border border-slate-100 rounded-xl space-y-1">
+                      <span className="block text-[10px] uppercase text-slate-400 font-bold flex justify-between items-center">
+                        Assessment Level <span>(%)</span>
+                      </span>
+                      <strong className="font-mono text-indigo-600 text-xs">
+                        {linkedFaas ? `${linkedFaas.assessmentLevel}%` : "N/A"}
+                      </strong>
+                    </div>
+                    <div className="p-3 bg-indigo-50 border border-indigo-100/50 rounded-xl space-y-1">
+                      <span className="block text-[10px] uppercase text-indigo-500 font-black">Assessed Tax Base</span>
+                      <strong className="font-mono text-indigo-700 text-sm">
+                        ₱{selectedTdn.assessedValue.toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Administrative Remarks & Audit Log Check */}
+                <div className="space-y-1 bg-slate-50 p-4 border border-slate-100 rounded-xl">
+                  <span className="block text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="h-4 w-4 text-indigo-600" />
+                    Municipal Assessor Operations Remarks
+                  </span>
+                  <div className="text-xs text-slate-650 text-slate-705 italic select-all leading-relaxed whitespace-pre-wrap font-sans bg-white border p-3 rounded-lg border-slate-200/50 mt-1">
+                    {selectedTdn.remarks || "No administrative remarks logged on this assessment document catalog."}
+                  </div>
+                </div>
+              </div>
+
+              {/* Close Button / Bottom Controls */}
+              <div className="flex gap-2.5 justify-end mt-6 border-t border-slate-100 pt-4">
+                <button
+                  onClick={() => setSelectedTdn(null)}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 hover:text-slate-750 text-slate-600 rounded-xl text-xs font-semibold cursor-pointer transition"
+                >
+                  Close Document
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

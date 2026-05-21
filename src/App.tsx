@@ -9,9 +9,12 @@ import BillingPanel from "./components/BillingPanel.tsx";
 import TreasuryPanel from "./components/TreasuryPanel.tsx";
 import Dashboard from "./components/Dashboard.tsx";
 import DocumentTemplatesPanel from "./components/DocumentTemplatesPanel.tsx";
-import { db, testConnection } from "./firebase.ts";
+import UserManagementPanel from "./components/UserManagementPanel.tsx";
+import LoginScreen from "./components/LoginScreen.tsx";
+import { db, auth, testConnection } from "./firebase.ts";
+import { signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { Cloud, Wifi, Database } from "lucide-react";
+import { Cloud, Wifi, Database, Key, ShieldAlert, LogIn } from "lucide-react";
 
 import {
   User,
@@ -215,9 +218,24 @@ export default function App() {
       const userVal = await userRes.json();
       setCurrentUser(userVal.user);
 
+      if (!userVal.user) {
+        setAllUsers([]);
+        setTaxpayers([]);
+        setProperties([]);
+        setFaas([]);
+        setDeclarations([]);
+        setSoa([]);
+        setPayments([]);
+        setReceipts([]);
+        setAttachments([]);
+        setAuditLogs([]);
+        setSettings(null);
+        return;
+      }
+
       // Load master records
       const [
-        tpRes, propRes, faasRes, decRes, soaRes, payRes, recRes, attRes, logRes, setRes
+        tpRes, propRes, faasRes, decRes, soaRes, payRes, recRes, attRes, logRes, setRes, usersRes
       ] = await Promise.all([
         fetch("/api/taxpayers"),
         fetch("/api/properties"),
@@ -228,11 +246,12 @@ export default function App() {
         fetch("/api/receipts"),
         fetch("/api/attachments"),
         fetch("/api/logs/audit"),
-        fetch("/api/gateways")
+        fetch("/api/gateways"),
+        fetch("/api/users")
       ]);
 
       const [
-        tp, prop, faasRecs, decRecs, soas, pays, recs, atts, logs, configs
+        tp, prop, faasRecs, decRecs, soas, pays, recs, atts, logs, configs, usersList
       ] = await Promise.all([
         tpRes.json(),
         propRes.json(),
@@ -243,7 +262,8 @@ export default function App() {
         recRes.json(),
         attRes.json(),
         logRes.json(),
-        setRes.json()
+        setRes.json(),
+        usersRes.json()
       ]);
 
       setTaxpayers(tp);
@@ -256,17 +276,7 @@ export default function App() {
       setAttachments(atts);
       setAuditLogs(logs);
       setSettings(configs);
-
-      // Populate sandbox users as well
-      setAllUsers([
-        { id: 1, username: "admin", name: "Honesto Administrator", email: "admin@paete.gov.ph", role: "System Administrator", office: "LGU Paete Admin Group", status: "active", createdAt: "2026" },
-        { id: 2, username: "assessor", name: "Renato D. Valdecantos", email: "assessor@paete.gov.ph", role: "Municipal Assessor", office: "Office of the Municipal Assessor", status: "active", createdAt: "2026" },
-        { id: 3, username: "cashier", name: "Maria Theresa Alarcon", email: "cashier@paete.gov.ph", role: "Treasury Cashier", office: "Office of the Municipal Treasurer", status: "active", createdAt: "2026" },
-        { id: 4, username: "treasurer", name: "Felipe L. Cagandahan", email: "treasurer@paete.gov.ph", role: "Municipal Treasurer", office: "Office of the Municipal Treasurer", status: "active", createdAt: "2026" },
-        { id: 5, username: "staff", name: "John Assessor Staff", email: "staff@paete.gov.ph", role: "Assessor Staff", office: "Office of the Municipal Assessor", status: "active", createdAt: "2026" },
-        { id: 6, username: "supervisor", name: "Carlos T. Supervisor", email: "supervisor@paete.gov.ph", role: "Treasury Supervisor", office: "Office of the Municipal Treasurer", status: "active", createdAt: "2026" },
-        { id: 7, username: "viewer", name: "Alicia P. Report Viewer", email: "viewer@paete.gov.ph", role: "Report Viewer", office: "Audit and Accounting Office", status: "active", createdAt: "2026" }
-      ]);
+      setAllUsers(usersList);
 
     } catch (err) {
       console.error("Critical error mapping full-stack REST API values:", err);
@@ -298,6 +308,22 @@ export default function App() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      const resp = await fetch("/api/auth/logout", { method: "POST" });
+      if (resp.ok) {
+        if (auth.currentUser) {
+          await firebaseSignOut(auth);
+        }
+        setCurrentUser(null);
+        setCurrentTab("dashboard");
+        loadAppState();
+      }
+    } catch (err) {
+      console.error("Logout request failed", err);
+    }
+  };
+
   const handleUpdateSettings = async (formData: any) => {
     try {
       const resp = await fetch("/api/settings", {
@@ -325,6 +351,18 @@ export default function App() {
     );
   }
 
+  // Redirect to login screen if not authenticated
+  if (!currentUser) {
+    return (
+      <LoginScreen
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          loadAppState();
+        }}
+      />
+    );
+  }
+
   // Routing to public portal separate screens
   if (isPublicMode) {
     return <PublicVerify onBack={() => setIsPublicMode(false)} />;
@@ -341,6 +379,7 @@ export default function App() {
         allUsers={allUsers}
         onSwitchUser={handleSwitchUser}
         onGoToPublicVerify={() => setIsPublicMode(true)}
+        onLogout={handleLogout}
       />
 
       {/* Main operational workspace */}
@@ -432,20 +471,24 @@ export default function App() {
 
               <div className="border rounded-xl overflow-hidden font-sans text-xs">
                 <table className="w-full text-left">
-                  <tr className="bg-slate-50 border-b font-bold text-slate-500">
-                    <th className="p-3">Flagged PIN</th>
-                    <th className="p-3">Primary Owner</th>
-                    <th className="p-3 text-center">Unpaid Years</th>
-                    <th className="p-3">Outstanding Certified Dues</th>
-                    <th className="p-3">Escrow Status</th>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="p-3 font-mono font-bold text-red-600">162-12-004-01-314</td>
-                    <td className="p-3 font-semibold">Luzviminda Q. Madriñan</td>
-                    <td className="p-3 text-center font-mono text-amber-600 font-bold">2026</td>
-                    <td className="p-3 font-mono text-red-600 font-bold">₱2,400.00</td>
-                    <td className="p-3"><span className="px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-200/50 rounded-full font-bold uppercase text-[9px]">Delinquent Status</span></td>
-                  </tr>
+                  <thead>
+                    <tr className="bg-slate-50 border-b font-bold text-slate-500">
+                      <th className="p-3">Flagged PIN</th>
+                      <th className="p-3">Primary Owner</th>
+                      <th className="p-3 text-center">Unpaid Years</th>
+                      <th className="p-3">Outstanding Certified Dues</th>
+                      <th className="p-3">Escrow Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b">
+                      <td className="p-3 font-mono font-bold text-red-600">162-12-004-01-314</td>
+                      <td className="p-3 font-semibold">Luzviminda Q. Madriñan</td>
+                      <td className="p-3 text-center font-mono text-amber-600 font-bold">2026</td>
+                      <td className="p-3 font-mono text-red-600 font-bold">₱2,400.00</td>
+                      <td className="p-3"><span className="px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-200/50 rounded-full font-bold uppercase text-[9px]">Delinquent Status</span></td>
+                    </tr>
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -469,26 +512,30 @@ export default function App() {
               </div>
               <div className="border rounded-xl overflow-hidden font-sans text-xs">
                 <table className="w-full text-left">
-                  <tr className="bg-slate-50 border-b font-bold text-slate-500 uppercase tracking-widest text-[9px]">
-                    <th className="p-3">OR Voucher</th>
-                    <th className="p-3">Cleared Payor</th>
-                    <th className="p-3">Total Transacted</th>
-                    <th className="p-3">Cashier</th>
-                    <th className="p-3">Archived Voucher Status</th>
-                  </tr>
-                  {receipts.map(r => (
-                    <tr key={r.id} className="border-b">
-                      <td className="p-3 font-mono font-semibold text-blue-600">{r.orNumber}</td>
-                      <td className="p-3 font-semibold">{r.taxpayerName}</td>
-                      <td className="p-3 font-mono font-bold text-emerald-600">₱{r.amount.toLocaleString()}</td>
-                      <td className="p-3 text-slate-500">{r.cashierName}</td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 border rounded text-[9px] font-bold ${
-                          r.status === "active" ? "bg-emerald-50 text-emerald-600 border-green-200" : "bg-red-50 text-red-600 border-red-200"
-                        }`}>{r.status.toUpperCase()}</span>
-                      </td>
+                  <thead>
+                    <tr className="bg-slate-50 border-b font-bold text-slate-500 uppercase tracking-widest text-[9px]">
+                      <th className="p-3">OR Voucher</th>
+                      <th className="p-3">Cleared Payor</th>
+                      <th className="p-3">Total Transacted</th>
+                      <th className="p-3">Cashier</th>
+                      <th className="p-3">Archived Voucher Status</th>
                     </tr>
-                  ))}
+                  </thead>
+                  <tbody>
+                    {receipts.map(r => (
+                      <tr key={r.id} className="border-b">
+                        <td className="p-3 font-mono font-semibold text-blue-600">{r.orNumber}</td>
+                        <td className="p-3 font-semibold">{r.taxpayerName}</td>
+                        <td className="p-3 font-mono font-bold text-emerald-600">₱{r.amount.toLocaleString()}</td>
+                        <td className="p-3 text-slate-500">{r.cashierName}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 border rounded text-[9px] font-bold ${
+                            r.status === "active" ? "bg-emerald-50 text-emerald-600 border-green-200" : "bg-red-50 text-red-600 border-red-200"
+                          }`}>{r.status.toUpperCase()}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -563,20 +610,24 @@ export default function App() {
               </div>
               <div className="border rounded-xl overflow-hidden font-sans text-xs">
                 <table className="w-full text-left">
-                  <tr className="bg-slate-50 border-b font-bold text-slate-500">
-                    <th className="p-3">File Name</th>
-                    <th className="p-3">Category Tag</th>
-                    <th className="p-3">Uploader</th>
-                    <th className="p-3">Timestamp Uploaded</th>
-                  </tr>
-                  {attachments.map(a => (
-                    <tr key={a.id} className="border-b">
-                      <td className="p-3 font-mono text-blue-600">{a.fileName}</td>
-                      <td className="p-3 font-semibold">{a.category}</td>
-                      <td className="p-3">{a.uploadedBy}</td>
-                      <td className="p-3 font-mono text-slate-500">{a.uploadedAt.split("T")[0]}</td>
+                  <thead>
+                    <tr className="bg-slate-50 border-b font-bold text-slate-500">
+                      <th className="p-3">File Name</th>
+                      <th className="p-3">Category Tag</th>
+                      <th className="p-3">Uploader</th>
+                      <th className="p-3">Timestamp Uploaded</th>
                     </tr>
-                  ))}
+                  </thead>
+                  <tbody>
+                    {attachments.map(a => (
+                      <tr key={a.id} className="border-b">
+                        <td className="p-3 font-mono text-blue-600">{a.fileName}</td>
+                        <td className="p-3 font-semibold">{a.category}</td>
+                        <td className="p-3">{a.uploadedBy}</td>
+                        <td className="p-3 font-mono text-slate-500">{a.uploadedAt.split("T")[0]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -628,26 +679,30 @@ export default function App() {
 
               <div className="border rounded-xl overflow-hidden font-mono text-[10.5px]" id="logs_table_container">
                 <table className="w-full text-left">
-                  <tr className="bg-slate-50 border-b font-sans font-bold text-slate-500 uppercase tracking-widest text-[9px]">
-                    <th className="p-3">Reference Log ID</th>
-                    <th className="p-3">User Account</th>
-                    <th className="p-3">Action Recorded</th>
-                    <th className="p-3">Assigned Module</th>
-                    <th className="p-3">JSON Changeset Payload Reference</th>
-                    <th className="p-3">Network IP</th>
-                    <th className="p-3">Timestamp Audit</th>
-                  </tr>
-                  {auditLogs.map(l => (
-                    <tr key={l.id} className="border-b hover:bg-slate-50/70 transition">
-                      <td className="p-3 text-slate-400">LOG-20260521-{String(l.id).padStart(5, "0")}</td>
-                      <td className="p-3 font-semibold font-sans text-slate-700">{l.username}</td>
-                      <td className="p-3 font-bold text-slate-800 uppercase">{l.action}</td>
-                      <td className="p-3 text-pink-600 font-sans text-[10px]">{l.module}</td>
-                      <td className="p-3 text-slate-400 select-all truncate max-w-[200px]" title={l.newValues}>{l.newValues}</td>
-                      <td className="p-3 text-slate-500">{l.ipAddress}</td>
-                      <td className="p-3 text-slate-500">{l.createdAt.replace("T", " ").replace("Z", "")}</td>
+                  <thead>
+                    <tr className="bg-slate-50 border-b font-sans font-bold text-slate-500 uppercase tracking-widest text-[9px]">
+                      <th className="p-3">Reference Log ID</th>
+                      <th className="p-3">User Account</th>
+                      <th className="p-3">Action Recorded</th>
+                      <th className="p-3">Assigned Module</th>
+                      <th className="p-3">JSON Changeset Payload Reference</th>
+                      <th className="p-3">Network IP</th>
+                      <th className="p-3">Timestamp Audit</th>
                     </tr>
-                  ))}
+                  </thead>
+                  <tbody>
+                    {auditLogs.map(l => (
+                      <tr key={l.id} className="border-b hover:bg-slate-50/70 transition">
+                        <td className="p-3 text-slate-400">LOG-20260521-{String(l.id).padStart(5, "0")}</td>
+                        <td className="p-3 font-semibold font-sans text-slate-700">{l.username}</td>
+                        <td className="p-3 font-bold text-slate-800 uppercase">{l.action}</td>
+                        <td className="p-3 text-pink-600 font-sans text-[10px]">{l.module}</td>
+                        <td className="p-3 text-slate-400 select-all truncate max-w-[200px]" title={l.newValues}>{l.newValues}</td>
+                        <td className="p-3 text-slate-500">{l.ipAddress}</td>
+                        <td className="p-3 text-slate-500">{l.createdAt.replace("T", " ").replace("Z", "")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -791,6 +846,14 @@ export default function App() {
           {currentTab === "templates" && (
             <DocumentTemplatesPanel
               currentUser={currentUser}
+              onRefresh={loadAppState}
+            />
+          )}
+
+          {currentTab === "users" && (
+            <UserManagementPanel
+              currentUser={currentUser}
+              allUsers={allUsers}
               onRefresh={loadAppState}
             />
           )}

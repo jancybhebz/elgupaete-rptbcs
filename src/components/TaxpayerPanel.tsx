@@ -231,15 +231,15 @@ export default function TaxpayerPanel({ taxpayers, properties, soa, currentUser,
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-700 font-sans"
                 required
               >
-                <option value="Bagumbayan">Bagumbayan</option>
-                <option value="Ermita">Ermita</option>
+                <option value="Ibaba del Sur">Bagumbayan</option>
                 <option value="Maytoong">Maytoong</option>
+                <option value="Ermita">Ermita</option>
                 <option value="Quinale">Quinale</option>
-                <option value="San Juan">San Juan</option>
-                <option value="San Pedro">San Pedro</option>
-                <option value="Ilaya Norte">Ilaya Norte</option>
-                <option value="Ilaya Sur">Ilaya Sur</option>
-                <option value="Poblacion">Poblacion</option>
+                <option value="Ilaya del Sur">Ilaya del Sur</option>
+                <option value="Ilaya del Norte">Ilaya del Norte</option>
+                <option value="Bagumbayan">Bagumbayan</option>
+                <option value="Bangkusay">Bangkusay</option>
+                <option value="Ibaba del Norte">Ibaba del Norte</option>
               </select>
             </div>
           </div>

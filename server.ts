@@ -68,13 +68,67 @@ async function startServer() {
   });
 
   app.get("/api/auth/me", (req, res) => {
-    if (!currentSession) {
-      // By default assume administrator is logged in to save user double-tapping, 
-      // but let them context-switch
-      const db = loadDatabase();
-      currentSession = db.users[0]; // Admin by default
-    }
     res.json({ user: currentSession });
+  });
+
+  app.post("/api/auth/google", (req, res) => {
+    const { email, name, uid } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required for Google Sign-In" });
+    }
+    const db = loadDatabase();
+    
+    let user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!user) {
+      const count = db.users.length;
+      const nextId = count > 0 ? Math.max(...db.users.map(u => u.id)) + 1 : 1;
+      const username = email.split("@")[0] || `google_${uid.slice(0, 5)}`;
+      
+      user = {
+        id: nextId,
+        username,
+        name: name || email,
+        email: email.toLowerCase(),
+        role: "System Administrator", 
+        office: "LGU Paete Admin Group",
+        status: "active",
+        passwordHash: "", 
+        createdAt: new Date().toISOString()
+      };
+      
+      db.users.push(user);
+      writeDatabase(db);
+      
+      logAction(
+        user.id,
+        user.username,
+        "USER_CREATE_GOOGLE",
+        "Authentication",
+        "users",
+        nextId,
+        null,
+        user
+      );
+    }
+    
+    if (user.status !== "active") {
+      return res.status(403).json({ message: `Account is ${user.status}. Access denied.` });
+    }
+    
+    currentSession = user;
+    
+    logAction(
+      user.id,
+      user.username,
+      "USER_LOGIN_GOOGLE",
+      "Authentication",
+      "users",
+      user.id,
+      null,
+      { username: user.username, role: user.role, time: new Date() }
+    );
+    
+    res.json({ user });
   });
 
   app.post("/api/auth/switch", (req, res) => {
@@ -104,6 +158,116 @@ async function startServer() {
     }
     currentSession = null;
     res.json({ message: "Logged out successfully" });
+  });
+
+  // 1.5. User Management (CRUD)
+  app.get("/api/users", (req, res) => {
+    const db = loadDatabase();
+    res.json(db.users);
+  });
+
+  app.post("/api/users", (req, res) => {
+    const db = loadDatabase();
+    const count = db.users.length;
+    const nextId = count > 0 ? Math.max(...db.users.map(u => u.id)) + 1 : 1;
+    
+    const { username, name, email, role, office, password, status } = req.body;
+    if (db.users.some(u => u.username === username)) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    const newUser = {
+      id: nextId,
+      username,
+      name,
+      email,
+      role,
+      office,
+      status: status || "active",
+      passwordHash: password || "password123",
+      createdAt: new Date().toISOString()
+    };
+
+    db.users.push(newUser);
+    writeDatabase(db);
+
+    logAction(
+      currentSession?.id || 1,
+      currentSession?.username || "admin",
+      "USER_CREATE",
+      "User Management",
+      "users",
+      nextId,
+      null,
+      newUser
+    );
+
+    res.json(newUser);
+  });
+
+  app.put("/api/users/:id", (req, res) => {
+    const db = loadDatabase();
+    const id = parseInt(req.params.id);
+    const userIndex = db.users.findIndex(u => u.id === id);
+    if (userIndex === -1) {
+      return res.status(444).json({ message: "User not found" });
+    }
+
+    const existingUser = db.users[userIndex];
+    const { name, email, role, office, password, status } = req.body;
+
+    const oldValues = { ...existingUser };
+    
+    if (name) existingUser.name = name;
+    if (email) existingUser.email = email;
+    if (role) existingUser.role = role;
+    if (office) existingUser.office = office;
+    if (status) existingUser.status = status;
+    if (password) existingUser.passwordHash = password;
+
+    writeDatabase(db);
+
+    logAction(
+      currentSession?.id || 1,
+      currentSession?.username || "admin",
+      "USER_UPDATE",
+      "User Management",
+      "users",
+      id,
+      oldValues,
+      existingUser
+    );
+
+    res.json(existingUser);
+  });
+
+  app.delete("/api/users/:id", (req, res) => {
+    const db = loadDatabase();
+    const id = parseInt(req.params.id);
+    const userIndex = db.users.findIndex(u => u.id === id);
+    if (userIndex === -1) {
+      return res.status(444).json({ message: "User not found" });
+    }
+
+    const deletedUser = db.users[userIndex];
+    if (deletedUser.username === "admin") {
+      return res.status(400).json({ message: "Cannot delete the master admin account." });
+    }
+    db.users.splice(userIndex, 1);
+    writeDatabase(db);
+
+    logAction(
+      currentSession?.id || 1,
+      currentSession?.username || "admin",
+      "USER_DELETE",
+      "User Management",
+      "users",
+      id,
+      deletedUser,
+      null
+    );
+
+    res.json({ success: true });
   });
 
   // 2. Taxpayer CRUD

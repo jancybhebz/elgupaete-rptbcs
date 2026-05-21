@@ -30,6 +30,7 @@ interface SidebarProps {
   allUsers: User[];
   onSwitchUser: (username: string) => void;
   onGoToPublicVerify: () => void;
+  onLogout: () => void;
 }
 
 export default function Sidebar({
@@ -38,7 +39,8 @@ export default function Sidebar({
   currentUser,
   allUsers,
   onSwitchUser,
-  onGoToPublicVerify
+  onGoToPublicVerify,
+  onLogout
 }: SidebarProps) {
   
   // High fidelity list of navigation menus with role restriction mappings
@@ -58,6 +60,7 @@ export default function Sidebar({
     { id: "reports", label: "LGU Reports Desk", icon: FileBarChart, roles: ["System Administrator", "Municipal Treasurer", "Treasury Supervisor", "Report Viewer", "Auditor / Read-only User"] },
     { id: "logs", label: "Audit Trails", icon: History, roles: ["System Administrator", "Auditor / Read-only User"] },
     { id: "settings", label: "System Config", icon: Settings, roles: ["System Administrator"] },
+    { id: "users", label: "User Management", icon: Users, roles: ["System Administrator"] },
     { id: "templates", label: "Document Templates", icon: FileSpreadsheet, roles: ["System Administrator"] }
   ];
 
@@ -160,13 +163,24 @@ export default function Sidebar({
               Connected: Oracle v8
             </div>
           </div>
-          <button
-            onClick={() => onSwitchUser("admin")}
-            className="p-1 px-1.5 rounded bg-slate-800 hover:bg-red-700 text-slate-400 hover:text-white transition cursor-pointer text-[10px] font-semibold"
-            title="Reset Sandbox Session"
-          >
-            Reset
-          </button>
+          <div className="flex gap-1.5 shrink-0">
+            <button
+              onClick={() => onSwitchUser("admin")}
+              className="p-1 px-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition cursor-pointer text-[10px] font-semibold"
+              title="Reset Sandbox Session"
+            >
+              Reset
+            </button>
+            <button
+              onClick={onLogout}
+              className="p-1 px-1.5 rounded bg-slate-800 hover:bg-red-700 text-slate-400 hover:text-white transition cursor-pointer text-[10px] font-semibold flex items-center gap-1"
+              title="Log out of system operator session"
+              id="btn_logout_action"
+            >
+              <Power className="h-3 w-3 text-red-500" />
+              Exit
+            </button>
+          </div>
         </div>
       </div>
 
